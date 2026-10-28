@@ -1,16 +1,17 @@
 {
   "expo": {
-    "name": "opencity-mobile",
+    "name": "OpenCity",
     "slug": "opencity-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "opencitymobile",
-    "userInterfaceStyle": "automatic",
+    "scheme": "opencity",
+    "userInterfaceStyle": "light",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/images/icon.png"
     },
     "android": {
+      "package": "org.houhackathon.opencity",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -28,11 +29,17 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#166a53",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
-      ]
+      ],
+      "expo-secure-store",
+      ["expo-build-properties", { "android": { "usesCleartextTraffic": true } }],
+      "./plugins/with-short-cmake-paths",
+      ["expo-location", { "locationWhenInUsePermission": "Cho phép OpenCity gắn vị trí vào phản ánh của bạn." }],
+      ["expo-image-picker", { "photosPermission": "Cho phép OpenCity chọn ảnh cho phản ánh của bạn.", "cameraPermission": "Cho phép OpenCity chụp ảnh cho phản ánh của bạn." }],
+      "@maplibre/maplibre-react-native"
     ],
     "experiments": {
       "typedRoutes": true,
