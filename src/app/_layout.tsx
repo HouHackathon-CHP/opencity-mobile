@@ -11,6 +11,8 @@ export default function RootLayout() {
       <Stack.Screen name="report/new" options={{ title: 'Gửi phản ánh' }} />
       <Stack.Screen name="report/[id]" options={{ title: 'Chi tiết phản ánh' }} />
       <Stack.Screen name="bulletin/[id]" options={{ title: 'Bản tin' }} />
+      <Stack.Screen name="surveys/index" options={{ title: 'Khảo sát ý kiến' }} />
+      <Stack.Screen name="surveys/[id]" options={{ title: 'Trả lời khảo sát' }} />
     </Stack>
   </AuthProvider></SafeAreaProvider>;
 }

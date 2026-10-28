@@ -9,6 +9,7 @@
 | Tài khoản | Đăng nhập Keycloak bằng Authorization Code + PKCE, lưu và làm mới phiên trên thiết bị, đăng xuất. |
 | Phản ánh | Tạo phản ánh có ảnh/vị trí tùy chọn, lưu bản nháp văn bản cục bộ, xem danh sách và tiến trình xử lý của chính mình. |
 | Tin & cảnh báo | Đọc bản tin/cảnh báo trong tenant, xem chi tiết và lọc theo loại. Chỉ operator của backend mới đăng tin. |
+| Khảo sát ý kiến | Xem khảo sát trong tenant, chọn một phương án một lần và xem kết quả sau khi trả lời hoặc khảo sát đóng. |
 | Bản đồ | Hiển thị phản ánh của chính người dùng và cảnh báo có tọa độ bằng MapLibre. |
 | Danh mục | Hiển thị các ý tưởng dịch vụ với trạng thái thật; các mục chưa triển khai không dẫn tới trang giả. |
 

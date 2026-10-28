@@ -2,6 +2,8 @@ import { GATEWAY_URL } from './config';
 
 export type Report = { id: string; title: string; description: string; category: string; address: string; latitude: number | null; longitude: number | null; state: string; created_at: string; attachment_ids: string[]; history: { action: string; at?: string; timestamp?: string }[]; warnings?: string[] };
 export type Bulletin = { id: string; category: 'news' | 'alert'; title: string; summary: string; body: string; area: string | null; latitude: number | null; longitude: number | null; published_at: string };
+export type SurveySummary = { id: string; title: string; description: string; status: 'open' | 'closed'; created_at: string; my_option_id: string | null };
+export type SurveyDetail = SurveySummary & { options: { id: string; label: string; votes: number | null }[]; total_responses: number | null; closed_at: string | null };
 export type Photo = { uri: string; fileName?: string | null; mimeType?: string | null };
 export type TokenGetter = () => Promise<string | null>;
 

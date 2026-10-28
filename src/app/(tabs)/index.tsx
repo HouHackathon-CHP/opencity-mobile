@@ -7,8 +7,9 @@ import { useAuth } from '@/lib/auth';
 import { Button, Card, colors, Heading, Page, styles } from '@/lib/ui';
 
 type Service = (typeof catalog.services)[number];
-const activeRoutes: Record<string, '/reports' | '/news' | '/map'> = {
+const activeRoutes: Record<string, '/reports' | '/news' | '/map' | '/surveys'> = {
   'field-reports': '/reports', 'report-map': '/map', 'official-news': '/news', warnings: '/news',
+  surveys: '/surveys',
 };
 export default function Home() {
   const auth = useAuth();
