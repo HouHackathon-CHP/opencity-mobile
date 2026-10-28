@@ -37,6 +37,8 @@ Lệnh trên tạo một junction đường dẫn ngắn ở gốc ổ đĩa (`D
 
 Nếu thay đổi native plugin hoặc Android config, chạy lại với `-Build`. Khi chạy trên điện thoại thật hoặc máy chủ khác, cần cấu hình URL công khai, HTTPS và redirect OIDC tương ứng; cấu hình `localhost` ở đây dành riêng cho emulator.
 
+Nút **Lấy vị trí hiện tại** cần quyền vị trí và GPS hoạt động. Trên emulator, hãy đặt vị trí trong **Extended controls → Location**; nếu thiết bị không trả tọa độ trong 10 giây, app sẽ báo lỗi và vẫn cho phép gửi phản ánh bằng địa chỉ nhập tay.
+
 ## Cấu hình
 
 Các biến Expo có thể đặt trong `.env.local` (không commit):

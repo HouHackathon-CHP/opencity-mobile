@@ -27,13 +27,21 @@ export default function NewReport() {
     if (!result.canceled) { const asset = result.assets[0]; setPhoto({ uri: asset.uri, fileName: asset.fileName, mimeType: asset.mimeType }); }
   };
   const locate = async () => {
+    setMessage('Đang lấy vị trí...');
     try {
       const permission = await Location.requestForegroundPermissionsAsync();
       if (!permission.granted) { setMessage('Hãy cấp quyền vị trí nếu muốn ghim điểm trên bản đồ.'); return; }
-      const point = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const point = await Promise.race([
+        (async () => {
+          const recent = await Location.getLastKnownPositionAsync({ maxAge: 120_000, requiredAccuracy: 100 });
+          return recent ?? await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        })(),
+        new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('location_timeout')), 10_000); }),
+      ]).finally(() => { if (timer) clearTimeout(timer); });
       setLatitude(point.coords.latitude); setLongitude(point.coords.longitude);
       setMessage('Đã gắn vị trí hiện tại.');
-    } catch { setMessage('Không lấy được vị trí. Bạn vẫn có thể nhập địa chỉ và gửi.'); }
+    } catch { setMessage('Không lấy được vị trí trên thiết bị. Bạn vẫn có thể nhập địa chỉ và gửi.'); }
   };
   const submit = async () => {
     if (title.trim().length < 5 || description.trim().length < 15 || !address.trim()) { setMessage('Tiêu đề tối thiểu 5 ký tự, nội dung 15 ký tự và cần địa chỉ.'); return; }
