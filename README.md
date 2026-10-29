@@ -35,6 +35,8 @@ App chưa tích hợp dịch vụ chính thức của Hà Nội. Dữ liệu `[D
 
 Chạy bằng PowerShell cũng được: `./gradlew.bat :app:installDebug`. Android Studio tự tạo `local.properties` chứa đường dẫn SDK. Nếu dùng CLI trước khi mở Android Studio, tạo `local.properties` với `sdk.dir=C:/Users/<user>/AppData/Local/Android/Sdk`.
 
+Nếu Run báo `Requested internal only, but not enough space`, emulator đã thiếu bộ nhớ trong. Hãy tạo một AVD mới trong **Device Manager** và chọn AVD đó để chạy; thao tác này không xóa dữ liệu của AVD cũ. AVD `Medium_Phone_API_36.0` trên máy thử nghiệm hiện chỉ còn khoảng 314 MB trống.
+
 ## Cấu hình
 
 Mặc định bản `debug` gọi `http://127.0.0.1:8081` (Keycloak) và `http://127.0.0.1:8000` (gateway) qua `adb reverse`. Có thể ghi đè trong `local.properties`:
