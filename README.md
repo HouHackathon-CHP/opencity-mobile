@@ -19,6 +19,8 @@ Các phần như dịch vụ công, ví giấy tờ, y tế, giao thông và th�
 
 Cần Docker Desktop, Android Studio với emulator đang chạy, Android SDK, JDK 21 và **Node.js 24**. Máy phát triển hiện tại có Node 24 trong runtime của Codex; `scripts/android.ps1` sẽ dùng bản đó nếu `node` mặc định là phiên bản khác. Expo Go không chạy được native MapLibre và luồng OAuth này; dùng development build.
 
+Để mở project Android và bấm **Run** trong Android Studio, cần bản hỗ trợ **Android Gradle Plugin 9.2.1**: tối thiểu **Android Studio Panda 4 (2025.3.4)** theo [bảng tương thích chính thức](https://developer.android.com/build/releases/about-agp#compatibility). Android Studio Panda 3 (2025.3.3) chỉ hỗ trợ đến AGP 9.1 và sẽ báo lỗi Gradle Sync. Sau khi chạy `scripts/android.ps1 -Build` để tạo thư mục `android/`, mở chính thư mục `opencity-mobile/android` trong Android Studio, chờ Gradle Sync, chọn cấu hình `app` và emulator rồi bấm Run. Thư mục `android/` được Expo tạo cục bộ và không được commit. Bản development build vẫn cần Metro chạy qua `scripts/android.ps1` để tải mã JavaScript; backend dữ liệu chạy riêng trong Docker.
+
 Đặt ba repo `dxos-core`, `opencity-backend`, `opencity-mobile` cạnh nhau. Từ `opencity-backend`:
 
 ```powershell
