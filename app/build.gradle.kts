@@ -23,7 +23,7 @@ android {
         versionCode = 1
         versionName = "1.0.0"
         manifestPlaceholders["appAuthRedirectScheme"] = "opencity"
-        buildConfigField("String", "IDENTITY_URL", "\"${config("IDENTITY_URL", "http://127.0.0.1:8081")}\"")
+        buildConfigField("String", "IDENTITY_URL", "\"${config("IDENTITY_URL", "http://localhost:8081")}\"")
         buildConfigField("String", "GATEWAY_URL", "\"${config("GATEWAY_URL", "http://127.0.0.1:8000")}\"")
     }
     buildTypes { release { isMinifyEnabled = false } }

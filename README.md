@@ -41,7 +41,7 @@ Nếu Run báo `Requested internal only, but not enough space`, emulator đã th
 
 ## Cấu hình
 
-Mặc định bản `debug` gọi `http://127.0.0.1:8081` (Keycloak) và `http://127.0.0.1:8000` (gateway) qua `adb reverse`. Có thể ghi đè trong `local.properties`:
+Mặc định bản `debug` gọi `http://localhost:8081` (Keycloak) và `http://127.0.0.1:8000` (gateway) qua `adb reverse`. Giữ URL Keycloak là `localhost`: trang đăng nhập và form của Keycloak phải dùng cùng một hostname để trình duyệt gửi cookie phiên. Có thể ghi đè trong `local.properties`:
 
 ```properties
 IDENTITY_URL=https://identity.example.org
