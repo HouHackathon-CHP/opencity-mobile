@@ -1,68 +1,57 @@
 # OpenCity Mobile
 
-Ứng dụng Android dành cho **người dân**, thuộc dự án OpenCity của HouHackathon-CHP. Ứng dụng dùng [DX-OS Core](https://github.com/HouHackathon-CHP/dxos-core) để đăng nhập và đi qua API gateway tới [OpenCity Backend](https://github.com/HouHackathon-CHP/opencity-backend). Mã nguồn mobile được giữ trong repo riêng.
+Ứng dụng **Android Kotlin + Jetpack Compose** cho người dân. Đây là client giao diện: đăng nhập bằng Keycloak của [DX-OS Core](https://github.com/HouHackathon-CHP/dxos-core) và gọi API của [OpenCity Backend](https://github.com/HouHackathon-CHP/opencity-backend) qua gateway. Không có backend hoặc Metro riêng trong repo này.
 
-## Đã hoạt động
+## Chức năng
 
-| Mục | Chức năng |
-| --- | --- |
-| Tài khoản | Đăng nhập Keycloak bằng Authorization Code + PKCE, lưu và làm mới phiên trên thiết bị, đăng xuất. |
-| Phản ánh | Tạo phản ánh có ảnh/vị trí tùy chọn, lưu bản nháp văn bản cục bộ, xem danh sách và tiến trình xử lý của chính mình. |
-| Tin & cảnh báo | Đọc bản tin/cảnh báo trong tenant, xem chi tiết và lọc theo loại. Chỉ operator của backend mới đăng tin. |
-| Khảo sát ý kiến | Xem khảo sát trong tenant, chọn một phương án một lần và xem kết quả sau khi trả lời hoặc khảo sát đóng. |
-| Bản đồ | Hiển thị phản ánh của chính người dùng và cảnh báo có tọa độ bằng MapLibre. |
-| Danh mục | Hiển thị các ý tưởng dịch vụ với trạng thái thật; các mục chưa triển khai không dẫn tới trang giả. |
+- Đăng nhập OAuth 2.0 Authorization Code + PKCE bằng AppAuth; phiên được mã hóa với Android Keystore, làm mới token khi cần.
+- Tạo phản ánh có ảnh/vị trí tùy chọn, lưu bản nháp trên máy, xem danh sách, chi tiết và tiến trình.
+- Đọc tin/cảnh báo và trả lời khảo sát một lần.
+- Xem phản ánh/cảnh báo có tọa độ trên MapLibre Native.
+- Xem danh mục dịch vụ với trạng thái tích hợp thực tế. Các mục chưa có API không mở trang giả.
 
-Các phần như dịch vụ công, ví giấy tờ, y tế, giao thông và thông báo đẩy cần API/dữ liệu hợp lệ trước khi bật. App không tích hợp với dịch vụ chính thức của Hà Nội. Nội dung `[DEMO]` chỉ là dữ liệu thử nghiệm.
+App chưa tích hợp dịch vụ chính thức của Hà Nội. Dữ liệu `[DEMO]` chỉ để thử nghiệm.
 
-## Chạy trên Android emulator
+## Mở và chạy trong Android Studio
 
-Cần Docker Desktop, Android Studio với emulator đang chạy, Android SDK, JDK 21 và **Node.js 24**. Máy phát triển hiện tại có Node 24 trong runtime của Codex; `scripts/android.ps1` sẽ dùng bản đó nếu `node` mặc định là phiên bản khác. Expo Go không chạy được native MapLibre và luồng OAuth này; dùng development build.
+Project dùng Gradle 8.11.1; trong **Settings → Build, Execution, Deployment → Build Tools → Gradle**, chọn **Gradle JDK 21** (ví dụ Temurin 21). JDK 25 không tương thích với phiên bản Gradle này. Trên máy đang phát triển, cấu hình project `.idea/gradle.xml` đã chọn macro `#JAVA_HOME` và `JAVA_HOME` trỏ tới Temurin 21. `.idea` là cấu hình riêng của máy, không được commit.
 
-Đặt ba repo `dxos-core`, `opencity-backend`, `opencity-mobile` cạnh nhau. Từ `opencity-backend`:
+1. Mở **thư mục gốc repo `D:\MNM2026\opencity-mobile`** bằng Android Studio. Chọn Gradle project `OpenCity`, cấu hình chạy `app` và Android emulator.
+2. Đảm bảo Docker Desktop đã chạy, rồi khởi động backend từ `D:\MNM2026\opencity-backend`:
 
-```powershell
-docker compose --env-file ..\dxos-core\.env -f ..\dxos-core\compose.yaml -f compose.stack.yaml up --build -d
-..\dxos-core\.venv\Scripts\python.exe ..\dxos-core\scripts\smoke.py
-.venv\Scripts\python.exe scripts\smoke_app.py
-```
+   ```powershell
+   docker compose --env-file ..\dxos-core\.env -f ..\dxos-core\compose.yaml -f compose.stack.yaml up --build -d
+   ..\dxos-core\.venv\Scripts\python.exe ..\dxos-core\scripts\smoke.py
+   .venv\Scripts\python.exe scripts\smoke_app.py
+   ```
 
-`smoke.py` bảo đảm client OIDC `dxos-mobile` có trong realm đang dùng và tạo tài khoản thử nghiệm. `smoke_app.py` kiểm thử backend và tạo một cảnh báo `[DEMO]` trên bản đồ nếu chưa có. Sau đó, trong `opencity-mobile`:
+3. Kết nối các cổng localhost của máy với emulator (mỗi lần emulator khởi động lại):
 
-```powershell
-npm ci
-.\scripts\android.ps1 -Build
-```
+   ```powershell
+   $adb = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
+   & $adb reverse tcp:8081 tcp:8081
+   & $adb reverse tcp:8000 tcp:8000
+   ```
 
-Lệnh trên tạo một junction đường dẫn ngắn ở gốc ổ đĩa (`D:\oc` trên máy dùng ổ D:) để tránh giới hạn 260 ký tự của Ninja trên Windows. Junction trỏ tới repo thật, không sao chép dữ liệu. Script cũng cấu hình `adb reverse` cho Keycloak `8081`, gateway `8000`, Metro `19000` và build/cài app lên emulator. Các lần chạy tiếp theo chỉ cần `.\scripts\android.ps1`, rồi mở **OpenCity** trên emulator và chọn server `http://127.0.0.1:19000` trong Development Build. Đăng nhập với tên `dxos-citizen` và mật khẩu `DEMO_CITIZEN_PASSWORD` trong `..\dxos-core\.env`. Không đưa mật khẩu vào repo.
+4. Bấm **Run ▶** trong Android Studio. App được build và cài trực tiếp; không cần `npm`, `npx`, Expo hoặc Metro. Đăng nhập bằng tài khoản thử `dxos-citizen`; mật khẩu nằm trong `DEMO_CITIZEN_PASSWORD` ở `..\dxos-core\.env`.
 
-Nếu thay đổi native plugin hoặc Android config, chạy lại với `-Build`. Khi chạy trên điện thoại thật hoặc máy chủ khác, cần cấu hình URL công khai, HTTPS và redirect OIDC tương ứng; cấu hình `localhost` ở đây dành riêng cho emulator.
+Chạy bằng PowerShell cũng được: `./gradlew.bat :app:installDebug`. Android Studio tự tạo `local.properties` chứa đường dẫn SDK. Nếu dùng CLI trước khi mở Android Studio, tạo `local.properties` với `sdk.dir=C:/Users/<user>/AppData/Local/Android/Sdk`.
 
-Nút **Lấy vị trí hiện tại** cần quyền vị trí và GPS hoạt động. Trên emulator, hãy đặt vị trí trong **Extended controls → Location**; nếu thiết bị không trả tọa độ trong 10 giây, app sẽ báo lỗi và vẫn cho phép gửi phản ánh bằng địa chỉ nhập tay.
+Nếu Run báo `Requested internal only, but not enough space`, emulator đã thiếu bộ nhớ trong. Hãy tạo một AVD mới trong **Device Manager** và chọn AVD đó để chạy; thao tác này không xóa dữ liệu của AVD cũ. AVD `Medium_Phone_API_36.0` trên máy thử nghiệm hiện chỉ còn khoảng 314 MB trống.
 
 ## Cấu hình
 
-Các biến Expo có thể đặt trong `.env.local` (không commit):
+Mặc định bản `debug` gọi `http://localhost:8081` (Keycloak) và `http://127.0.0.1:8000` (gateway) qua `adb reverse`. Giữ URL Keycloak là `localhost`: trang đăng nhập và form của Keycloak phải dùng cùng một hostname để trình duyệt gửi cookie phiên. Có thể ghi đè trong `local.properties`:
 
-```dotenv
-EXPO_PUBLIC_IDENTITY_URL=http://localhost:8081
-EXPO_PUBLIC_GATEWAY_URL=http://localhost:8000
-# Tùy chọn: URL style MapLibre do bạn vận hành.
-# EXPO_PUBLIC_MAP_STYLE_URL=https://maps.example.org/style.json
+```properties
+IDENTITY_URL=https://identity.example.org
+GATEWAY_URL=https://api.example.org
 ```
 
-Mặc định bản đồ dùng raster tiles OpenStreetMap để thử trên emulator, có ghi nguồn trên bản đồ. Khi triển khai thật, hãy cấu hình tile/style server có đủ năng lực và quyền phục vụ lưu lượng của mình. Android hiện cho phép HTTP để thử cục bộ. Cần chuyển sang HTTPS và bỏ cleartext trước khi phát hành.
+`local.properties` không được commit. Bản `release` chặn HTTP cleartext; trước khi phát hành phải cấu hình HTTPS công khai và redirect OIDC cho môi trường đó. Bản demo cần Chrome hoặc trình duyệt hỗ trợ Custom Tabs trên emulator. Nếu lấy GPS không được, đặt vị trí trong **Extended controls → Location** hoặc nhập địa chỉ bằng tay.
 
-## Kiểm tra
+Bản đồ demo dùng raster tiles OpenStreetMap và ghi nguồn ngay dưới bản đồ. Khi triển khai thật cần style/tile server có quyền và đủ năng lực phục vụ lưu lượng của mình.
 
-```powershell
-npm run typecheck
-npm run check:licenses
-npx expo export --platform android
-```
+## Công nghệ và giấy phép
 
-CI kiểm tra ba bước trên bằng Node 24. Native Android build và thao tác đăng nhập trên emulator cần SDK/Keycloak chạy cục bộ.
-
-## Nguồn mở
-
-Repo theo giấy phép MIT. `scripts/check-licenses.mjs` kiểm tra metadata giấy phép của các package npm trực tiếp và bắc cầu; xem [báo cáo rà soát](docs/license-audit.md). Một ngoại lệ được ghi rõ là bộ dữ liệu trình duyệt `caniuse-lite` theo CC-BY-4.0, không phải giấy phép phần mềm OSI. Việc kiểm tra metadata không bao phủ Android SDK, Gradle artifacts, tile server hoặc nội dung bên ngoài. Chạy `npm audit` và xử lý advisory trước phát hành.
+Kotlin, Jetpack Compose, Android Gradle Plugin, AppAuth, OkHttp và MapLibre Native Android. Mã nguồn repo phát hành theo [MIT](LICENSE). AppAuth dùng Apache-2.0, MapLibre Native dùng BSD-2-Clause; đây đều là giấy phép được OSI phê duyệt. Tài nguyên tile/dữ liệu bản đồ có điều kiện sử dụng riêng.
