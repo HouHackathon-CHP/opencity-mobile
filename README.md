@@ -14,6 +14,8 @@ App chưa tích hợp dịch vụ chính thức của Hà Nội. Dữ liệu `[D
 
 ## Mở và chạy trong Android Studio
 
+Project dùng Gradle 8.11.1; trong **Settings → Build, Execution, Deployment → Build Tools → Gradle**, chọn **Gradle JDK 21** (ví dụ Temurin 21). JDK 25 không tương thích với phiên bản Gradle này. Trên máy đang phát triển, cấu hình project `.idea/gradle.xml` đã chọn macro `#JAVA_HOME` và `JAVA_HOME` trỏ tới Temurin 21. `.idea` là cấu hình riêng của máy, không được commit.
+
 1. Mở **thư mục gốc repo `D:\MNM2026\opencity-mobile`** bằng Android Studio. Chọn Gradle project `OpenCity`, cấu hình chạy `app` và Android emulator.
 2. Đảm bảo Docker Desktop đã chạy, rồi khởi động backend từ `D:\MNM2026\opencity-backend`:
 
