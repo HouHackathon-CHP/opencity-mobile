@@ -40,6 +40,8 @@ class ApiClient(private val context: Context, private val auth: AuthManager) {
     suspend fun item(path: String): JSONObject = JSONObject(request(path))
     suspend fun answer(surveyId: String, optionId: String): JSONObject = itemPost(
         "/surveys/$surveyId/answers", JSONObject().put("option_id", optionId))
+    suspend fun readNotification(notificationId: String): JSONObject =
+        itemPost("/notifications/$notificationId/read", JSONObject())
     private suspend fun itemPost(path: String, value: JSONObject): JSONObject = JSONObject(request(path, "POST",
         value.toString().toRequestBody("application/json".toMediaType())))
 

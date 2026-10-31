@@ -6,11 +6,13 @@
 
 - Đăng nhập OAuth 2.0 Authorization Code + PKCE bằng AppAuth; phiên được mã hóa với Android Keystore, làm mới token khi cần.
 - Tạo phản ánh có ảnh/vị trí tùy chọn, lưu bản nháp trên máy, xem danh sách, chi tiết và tiến trình.
+- Xem thông báo tiến độ phản ánh trong app, đánh dấu đã đọc và mở thẳng hồ sơ liên quan.
 - Đọc tin/cảnh báo và trả lời khảo sát một lần.
 - Xem phản ánh/cảnh báo có tọa độ trên MapLibre Native.
 - Xem danh mục dịch vụ với trạng thái tích hợp thực tế. Các mục chưa có API không mở trang giả.
 
 App chưa tích hợp dịch vụ chính thức của Hà Nội. Dữ liệu `[DEMO]` chỉ để thử nghiệm.
+Thông báo hiện là hộp thư trong app; app tải lại khi mở màn thông báo. Chưa có push notification khi app đang đóng.
 
 ## Mở và chạy trong Android Studio
 
