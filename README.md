@@ -8,6 +8,7 @@
 - Tạo phản ánh có ảnh/vị trí tùy chọn, lưu bản nháp trên máy, xem danh sách, chi tiết và tiến trình.
 - Xem thông báo tiến độ phản ánh trong app, đánh dấu đã đọc và mở thẳng hồ sơ liên quan.
 - Đọc tin/cảnh báo và trả lời khảo sát một lần.
+- Đăng ký khung giờ tiếp công dân thử nghiệm, theo dõi trạng thái và hủy yêu cầu của chính mình.
 - Xem phản ánh/cảnh báo có tọa độ trên MapLibre Native.
 - Xem danh mục dịch vụ với trạng thái tích hợp thực tế. Các mục chưa có API không mở trang giả.
 

@@ -161,6 +161,7 @@ private fun OpenCityApp(
                                             "new-report" -> "reports"
                                             "catalog" -> "home"
                                             "surveys" -> "home"
+                                            "appointments" -> "home"
                                             "notifications" -> notificationReturnPage
                                             else -> "home"
                                         }
@@ -313,6 +314,7 @@ private fun OpenCityApp(
                                 page = "detail"
                             }
                         )
+                        "appointments" -> AppointmentsScreen(api = api, revision = revision)
                         "map" -> MapScreen(
                             api = api,
                             revision = revision,
@@ -383,6 +385,7 @@ private fun pageTitle(page: String, detailKind: String = ""): String = when (pag
     "map" -> "Bản đồ đô thị số"
     "account" -> "Tài khoản công dân"
     "surveys" -> "Khảo sát ý kiến"
+    "appointments" -> "Tiếp công dân"
     "new-report" -> "Tạo phản ánh mới"
     "catalog" -> "Danh mục dịch vụ"
     "notifications" -> "Thông báo"
