@@ -168,6 +168,7 @@ private fun OpenCityApp(
                                             "communications" -> "home"
                                             "community-groups" -> "home"
                                             "social-feedback" -> "home"
+                                            "digital-wards" -> "home"
                                             "notifications" -> notificationReturnPage
                                             else -> "home"
                                         }
@@ -327,6 +328,7 @@ private fun OpenCityApp(
                             onClick = { detailKind = "communication"; detailId = it; page = "detail" })
                         "community-groups" -> CommunityGroupsScreen(api = api, revision = revision)
                         "social-feedback" -> SocialFeedbackScreen(api = api, revision = revision)
+                        "digital-wards" -> DigitalWardScreen(api = api, revision = revision, onNavigate = { page = it })
                         "map" -> MapScreen(
                             api = api,
                             revision = revision,
@@ -404,6 +406,7 @@ private fun pageTitle(page: String, detailKind: String = ""): String = when (pag
     "communications" -> "Thông tin truyền thông"
     "community-groups" -> "Nhóm cộng đồng"
     "social-feedback" -> "Góp ý xã hội"
+    "digital-wards" -> "Xã/phường số"
     "new-report" -> "Tạo phản ánh mới"
     "catalog" -> "Danh mục dịch vụ"
     "notifications" -> "Thông báo"
