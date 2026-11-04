@@ -10,23 +10,24 @@
 - Đọc tin/cảnh báo và trả lời khảo sát một lần.
 - Đăng ký khung giờ tiếp công dân thử nghiệm, theo dõi trạng thái và hủy yêu cầu của chính mình.
 - Gửi phản ánh thủ tục hành chính, xem câu trả lời, yêu cầu làm rõ hoặc kết thúc hồ sơ.
-- Xem phản ánh/cảnh báo có tọa độ trên MapLibre Native.
+- Xem phản ánh/cảnh báo có tọa độ trên MapLibre Native; lọc phản ánh theo trạng thái.
 - Xem danh mục dịch vụ với trạng thái tích hợp thực tế. Các mục chưa có API không mở trang giả.
 
 App chưa tích hợp dịch vụ chính thức của Hà Nội. Dữ liệu `[DEMO]` chỉ để thử nghiệm.
 Thông báo hiện là hộp thư trong app; app tải lại khi mở màn thông báo. Chưa có push notification khi app đang đóng.
+Quy trình kiến nghị doanh nghiệp hiện ở cổng web; app Android này chỉ dành cho người dân.
 
 ## Mở và chạy trong Android Studio
 
-Project dùng Gradle 8.11.1; trong **Settings → Build, Execution, Deployment → Build Tools → Gradle**, chọn **Gradle JDK 21** (ví dụ Temurin 21). JDK 25 không tương thích với phiên bản Gradle này. Trên máy đang phát triển, cấu hình project `.idea/gradle.xml` đã chọn macro `#JAVA_HOME` và `JAVA_HOME` trỏ tới Temurin 21. `.idea` là cấu hình riêng của máy, không được commit.
+Project dùng Gradle 8.11.1; trong **Settings → Build, Execution, Deployment → Build Tools → Gradle**, chọn **Gradle JDK 21** (ví dụ Temurin 21). JDK 25 không tương thích với phiên bản Gradle này. `.idea` là cấu hình riêng của máy, không được commit.
 
 1. Mở **thư mục gốc repo `D:\MNM2026\opencity-mobile`** bằng Android Studio. Chọn Gradle project `OpenCity`, cấu hình chạy `app` và Android emulator.
 2. Đảm bảo Docker Desktop đã chạy, rồi khởi động backend từ `D:\MNM2026\opencity-backend`:
 
    ```powershell
    docker compose --env-file ..\dxos-core\.env -f ..\dxos-core\compose.yaml -f compose.stack.yaml up --build -d
-   ..\dxos-core\.venv\Scripts\python.exe ..\dxos-core\scripts\smoke.py
-   .venv\Scripts\python.exe scripts\smoke_app.py
+   python ..\dxos-core\scripts\smoke.py
+   python scripts\smoke_app.py
    ```
 
 3. Kết nối các cổng localhost của máy với emulator (mỗi lần emulator khởi động lại):
@@ -41,7 +42,7 @@ Project dùng Gradle 8.11.1; trong **Settings → Build, Execution, Deployment �
 
 Chạy bằng PowerShell cũng được: `./gradlew.bat :app:installDebug`. Android Studio tự tạo `local.properties` chứa đường dẫn SDK. Nếu dùng CLI trước khi mở Android Studio, tạo `local.properties` với `sdk.dir=C:/Users/<user>/AppData/Local/Android/Sdk`.
 
-Nếu Run báo `Requested internal only, but not enough space`, emulator đã thiếu bộ nhớ trong. Hãy tạo một AVD mới trong **Device Manager** và chọn AVD đó để chạy; thao tác này không xóa dữ liệu của AVD cũ. AVD `Medium_Phone_API_36.0` trên máy thử nghiệm hiện chỉ còn khoảng 314 MB trống.
+Nếu Run báo `Requested internal only, but not enough space`, emulator đã thiếu bộ nhớ trong. Hãy tạo một AVD mới trong **Device Manager** và chọn AVD đó để chạy; thao tác này không xóa dữ liệu của AVD cũ.
 
 ## Cấu hình
 
