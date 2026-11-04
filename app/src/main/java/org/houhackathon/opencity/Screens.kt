@@ -1753,7 +1753,7 @@ fun CatalogScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
 
                                 val isAvailable = service.text("status") == "available"
                                 val route = service.text("route").removePrefix("/")
-                                val canNavigate = isAvailable && route in setOf("reports", "news", "map", "surveys", "appointments", "administrative-feedback", "hotlines", "communications", "community-groups")
+                                val canNavigate = isAvailable && route in setOf("reports", "news", "map", "surveys", "appointments", "administrative-feedback", "hotlines", "communications", "community-groups", "social-feedback")
 
                                 Row(
                                     modifier = Modifier
