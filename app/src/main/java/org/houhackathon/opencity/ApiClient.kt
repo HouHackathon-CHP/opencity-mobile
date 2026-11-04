@@ -60,6 +60,9 @@ class ApiClient(private val context: Context, private val auth: AuthManager) {
         JSONObject(request("/community/groups/$id/join", "DELETE"))
     suspend fun postToCommunityGroup(id: String, body: String): JSONObject =
         itemPost("/community/groups/$id/posts", JSONObject().put("body", body.trim()))
+    suspend fun saveConsultationOpinion(id: String, body: String): JSONObject = JSONObject(
+        request("/social-feedback/topics/$id/opinion", "PUT",
+            JSONObject().put("body", body.trim()).toString().toRequestBody("application/json".toMediaType())))
     private suspend fun itemPost(path: String, value: JSONObject): JSONObject = JSONObject(request(path, "POST",
         value.toString().toRequestBody("application/json".toMediaType())))
 
