@@ -166,6 +166,7 @@ private fun OpenCityApp(
                                             "administrative-feedback" -> "home"
                                             "hotlines" -> "home"
                                             "communications" -> "home"
+                                            "community-groups" -> "home"
                                             "notifications" -> notificationReturnPage
                                             else -> "home"
                                         }
@@ -323,6 +324,7 @@ private fun OpenCityApp(
                         "hotlines" -> HotlinesScreen(api = api, revision = revision)
                         "communications" -> ListScreen(api = api, path = "/communications", title = "Thông tin truyền thông", revision = revision,
                             onClick = { detailKind = "communication"; detailId = it; page = "detail" })
+                        "community-groups" -> CommunityGroupsScreen(api = api, revision = revision)
                         "map" -> MapScreen(
                             api = api,
                             revision = revision,
@@ -398,6 +400,7 @@ private fun pageTitle(page: String, detailKind: String = ""): String = when (pag
     "administrative-feedback" -> "Phản ánh thủ tục hành chính"
     "hotlines" -> "Đường dây nóng"
     "communications" -> "Thông tin truyền thông"
+    "community-groups" -> "Nhóm cộng đồng"
     "new-report" -> "Tạo phản ánh mới"
     "catalog" -> "Danh mục dịch vụ"
     "notifications" -> "Thông báo"

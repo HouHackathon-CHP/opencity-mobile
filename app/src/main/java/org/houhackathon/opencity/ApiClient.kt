@@ -54,6 +54,12 @@ class ApiClient(private val context: Context, private val auth: AuthManager) {
             .put("description", description.trim()))
     suspend fun administrativeFeedbackAction(id: String, action: String, note: String = ""): JSONObject =
         itemPost("/administrative-feedback/$id/$action", JSONObject().put("note", note.trim()))
+    suspend fun joinCommunityGroup(id: String): JSONObject =
+        itemPost("/community/groups/$id/join", JSONObject())
+    suspend fun leaveCommunityGroup(id: String): JSONObject =
+        JSONObject(request("/community/groups/$id/join", "DELETE"))
+    suspend fun postToCommunityGroup(id: String, body: String): JSONObject =
+        itemPost("/community/groups/$id/posts", JSONObject().put("body", body.trim()))
     private suspend fun itemPost(path: String, value: JSONObject): JSONObject = JSONObject(request(path, "POST",
         value.toString().toRequestBody("application/json".toMediaType())))
 
