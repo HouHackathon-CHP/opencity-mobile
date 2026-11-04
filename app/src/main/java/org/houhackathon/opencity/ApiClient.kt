@@ -46,6 +46,14 @@ class ApiClient(private val context: Context, private val auth: AuthManager) {
         itemPost("/appointments", JSONObject().put("slot_id", slotId).put("reason", reason.trim()))
     suspend fun cancelAppointment(appointmentId: String): JSONObject =
         itemPost("/appointments/$appointmentId/cancel", JSONObject())
+    suspend fun createAdministrativeFeedback(title: String, procedure: String, agency: String,
+                                             issueType: String, description: String): JSONObject =
+        itemPost("/administrative-feedback", JSONObject()
+            .put("title", title.trim()).put("procedure", procedure.trim())
+            .put("agency", agency.trim()).put("issue_type", issueType)
+            .put("description", description.trim()))
+    suspend fun administrativeFeedbackAction(id: String, action: String, note: String = ""): JSONObject =
+        itemPost("/administrative-feedback/$id/$action", JSONObject().put("note", note.trim()))
     private suspend fun itemPost(path: String, value: JSONObject): JSONObject = JSONObject(request(path, "POST",
         value.toString().toRequestBody("application/json".toMediaType())))
 
