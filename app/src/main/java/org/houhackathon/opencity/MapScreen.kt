@@ -3,6 +3,7 @@ package org.houhackathon.opencity
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -33,7 +34,13 @@ import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 
-private data class Point(val id: String, val kind: String, val title: String, val lat: Double, val lon: Double)
+private data class Point(val id: String, val kind: String, val title: String, val lat: Double, val lon: Double,
+                         val state: String = "")
+
+private val reportStates = linkedMapOf(
+    "submitted" to "Mới gửi", "triaged" to "Đã tiếp nhận",
+    "assigned" to "Đang xử lý", "resolved" to "Đã hoàn tất"
+)
 
 private val osmStyle = """
 {"version":8,"sources":{"openstreetmap":{"type":"raster","tiles":["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],"tileSize":256,"attribution":"© OpenStreetMap contributors"}},"layers":[{"id":"openstreetmap","type":"raster","source":"openstreetmap"}]}
@@ -49,6 +56,7 @@ fun MapScreen(
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var filter by remember { mutableStateOf("all") }
+    var statusFilter by remember { mutableStateOf("all") }
     var reload by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(revision, reload) {
@@ -65,7 +73,10 @@ fun MapScreen(
         }
     }
 
-    val visible = points.filter { filter == "all" || it.kind == filter }
+    val visible = points.filter { point ->
+        (filter == "all" || point.kind == filter) &&
+            (point.kind != "report" || statusFilter == "all" || point.state == statusFilter)
+    }
 
     Column(
         modifier = Modifier
@@ -88,7 +99,7 @@ fun MapScreen(
                     color = OpenCityColors.TextMain
                 )
                 Text(
-                    text = "Hiển thị tọa độ phản ánh hiện trường & cảnh báo an toàn",
+                    text = "Phản ánh của bạn theo vị trí, trạng thái và cảnh báo an toàn",
                     fontSize = 12.sp,
                     color = OpenCityColors.TextSecondary
                 )
@@ -106,7 +117,7 @@ fun MapScreen(
 
         // Filter Chips Row
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             listOf("all" to "Tất cả", "report" to "Phản ánh hiện trường", "bulletin" to "Cảnh báo khẩn").forEach { (key, label) ->
@@ -133,6 +144,17 @@ fun MapScreen(
                         borderColor = if (isSelected) (if (key == "bulletin") OpenCityColors.BrandRed else OpenCityColors.BrandAzure) else OpenCityColors.BorderColor
                     )
                 )
+            }
+        }
+
+        if (filter != "bulletin") {
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                (listOf("all" to "Mọi trạng thái") + reportStates.toList()).forEach { (key, label) ->
+                    FilterChip(selected = statusFilter == key, onClick = { statusFilter = key },
+                        label = { Text(label, fontSize = 12.sp) })
+                }
             }
         }
 
@@ -279,7 +301,7 @@ fun MapScreen(
                             Spacer(Modifier.height(2.dp))
 
                             Text(
-                                text = "Tọa độ: %.5f, %.5f".format(point.lat, point.lon),
+                                text = if (isAlert) "Cảnh báo" else reportStates[point.state] ?: "Phản ánh",
                                 fontSize = 11.sp,
                                 color = OpenCityColors.TextLight
                             )
@@ -303,7 +325,8 @@ fun MapScreen(
 private fun JSONObject.asPoint(kind: String): Point? {
     val lat = number("latitude") ?: return null
     val lon = number("longitude") ?: return null
-    return Point(text("id"), kind, text("title"), lat, lon)
+    if (!lat.isFinite() || !lon.isFinite() || lat !in -90.0..90.0 || lon !in -180.0..180.0) return null
+    return Point(text("id"), kind, text("title"), lat, lon, text("state").ifBlank { "submitted" })
 }
 
 @Composable

@@ -54,7 +54,7 @@ GATEWAY_URL=https://api.example.org
 
 `local.properties` không được commit. Bản `release` chặn HTTP cleartext; trước khi phát hành phải cấu hình HTTPS công khai và redirect OIDC cho môi trường đó. Bản demo cần Chrome hoặc trình duyệt hỗ trợ Custom Tabs trên emulator. Nếu lấy GPS không được, đặt vị trí trong **Extended controls → Location** hoặc nhập địa chỉ bằng tay.
 
-Bản đồ demo dùng raster tiles OpenStreetMap và ghi nguồn ngay dưới bản đồ. Khi triển khai thật cần style/tile server có quyền và đủ năng lực phục vụ lưu lượng của mình.
+Bản đồ hiển thị các phản ánh của tài khoản đang đăng nhập và cảnh báo có tọa độ, cho phép lọc phản ánh theo trạng thái. Bản đồ demo dùng raster tiles OpenStreetMap và ghi nguồn ngay dưới bản đồ. Khi triển khai thật cần style/tile server có quyền và đủ năng lực phục vụ lưu lượng của mình.
 
 ## Công nghệ và giấy phép
 
