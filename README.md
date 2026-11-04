@@ -12,6 +12,7 @@
 - Gửi phản ánh thủ tục hành chính, xem câu trả lời, yêu cầu làm rõ hoặc kết thúc hồ sơ.
 - Xem phản ánh/cảnh báo có tọa độ trên MapLibre Native; lọc phản ánh theo trạng thái.
 - Xem danh mục dịch vụ với trạng thái tích hợp thực tế. Các mục chưa có API không mở trang giả.
+- Tra cứu đường dây nóng theo tên, đơn vị, khu vực và mở ứng dụng gọi bằng số đã công bố.
 
 App chưa tích hợp dịch vụ chính thức của Hà Nội. Dữ liệu `[DEMO]` chỉ để thử nghiệm.
 Thông báo hiện là hộp thư trong app; app tải lại khi mở màn thông báo. Chưa có push notification khi app đang đóng.

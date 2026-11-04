@@ -163,6 +163,7 @@ private fun OpenCityApp(
                                             "surveys" -> "home"
                                             "appointments" -> "home"
                                             "administrative-feedback" -> "home"
+                                            "hotlines" -> "home"
                                             "notifications" -> notificationReturnPage
                                             else -> "home"
                                         }
@@ -317,6 +318,7 @@ private fun OpenCityApp(
                         )
                         "appointments" -> AppointmentsScreen(api = api, revision = revision)
                         "administrative-feedback" -> AdministrativeFeedbackScreen(api = api, revision = revision)
+                        "hotlines" -> HotlinesScreen(api = api, revision = revision)
                         "map" -> MapScreen(
                             api = api,
                             revision = revision,
@@ -389,6 +391,7 @@ private fun pageTitle(page: String, detailKind: String = ""): String = when (pag
     "surveys" -> "Khảo sát ý kiến"
     "appointments" -> "Tiếp công dân"
     "administrative-feedback" -> "Phản ánh thủ tục hành chính"
+    "hotlines" -> "Đường dây nóng"
     "new-report" -> "Tạo phản ánh mới"
     "catalog" -> "Danh mục dịch vụ"
     "notifications" -> "Thông báo"
