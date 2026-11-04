@@ -156,6 +156,7 @@ private fun OpenCityApp(
                                             "detail" -> when (detailKind) {
                                                 "report" -> "reports"
                                                 "bulletin" -> "news"
+                                                "communication" -> "communications"
                                                 else -> "surveys"
                                             }
                                             "new-report" -> "reports"
@@ -164,6 +165,7 @@ private fun OpenCityApp(
                                             "appointments" -> "home"
                                             "administrative-feedback" -> "home"
                                             "hotlines" -> "home"
+                                            "communications" -> "home"
                                             "notifications" -> notificationReturnPage
                                             else -> "home"
                                         }
@@ -319,6 +321,8 @@ private fun OpenCityApp(
                         "appointments" -> AppointmentsScreen(api = api, revision = revision)
                         "administrative-feedback" -> AdministrativeFeedbackScreen(api = api, revision = revision)
                         "hotlines" -> HotlinesScreen(api = api, revision = revision)
+                        "communications" -> ListScreen(api = api, path = "/communications", title = "Thông tin truyền thông", revision = revision,
+                            onClick = { detailKind = "communication"; detailId = it; page = "detail" })
                         "map" -> MapScreen(
                             api = api,
                             revision = revision,
@@ -371,6 +375,7 @@ private fun OpenCityApp(
                                 page = when (detailKind) {
                                     "report" -> "reports"
                                     "bulletin" -> "news"
+                                    "communication" -> "communications"
                                     else -> "surveys"
                                 }
                             },
@@ -392,12 +397,14 @@ private fun pageTitle(page: String, detailKind: String = ""): String = when (pag
     "appointments" -> "Tiếp công dân"
     "administrative-feedback" -> "Phản ánh thủ tục hành chính"
     "hotlines" -> "Đường dây nóng"
+    "communications" -> "Thông tin truyền thông"
     "new-report" -> "Tạo phản ánh mới"
     "catalog" -> "Danh mục dịch vụ"
     "notifications" -> "Thông báo"
     "detail" -> when (detailKind) {
         "report" -> "Chi tiết phản ánh"
         "bulletin" -> "Chi tiết bản tin"
+        "communication" -> "Thông tin truyền thông"
         "survey" -> "Biểu quyết khảo sát"
         else -> "Chi tiết"
     }
