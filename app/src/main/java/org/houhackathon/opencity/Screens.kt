@@ -556,6 +556,7 @@ fun ListScreen(
     val kind = when (path) {
         "/reports" -> "report"
         "/bulletins" -> "bulletin"
+        "/communications" -> "communication"
         else -> "survey"
     }
 
@@ -583,6 +584,7 @@ fun ListScreen(
             "alert" to "Cảnh báo khẩn",
             "news" to "Bản tin đô thị"
         )
+        "communication" -> listOf("all" to "Tất cả")
         else -> listOf(
             "all" to "Tất cả",
             "open" to "Đang mở",
@@ -732,6 +734,7 @@ private fun ItemCard(item: JSONObject, kind: String, onClick: () -> Unit) {
                 val categoryName = when (kind) {
                     "report" -> item.text("category").ifBlank { "Hạ tầng" }
                     "bulletin" -> if (item.text("category") == "alert") "CẢNH BÁO" else "BẢN TIN"
+                    "communication" -> "TRUYỀN THÔNG"
                     else -> "KHẢO SÁT"
                 }
 
@@ -766,7 +769,7 @@ private fun ItemCard(item: JSONObject, kind: String, onClick: () -> Unit) {
             // Card Subtitle / Description
             val subtitle = when (kind) {
                 "report" -> item.text("address")
-                "bulletin" -> item.text("summary").ifBlank { item.text("body") }
+                "bulletin", "communication" -> item.text("summary").ifBlank { item.text("body") }
                 else -> item.text("description")
             }
 
@@ -807,7 +810,7 @@ private fun ItemCard(item: JSONObject, kind: String, onClick: () -> Unit) {
             ) {
                 val meta = when (kind) {
                     "report" -> item.text("created_at").take(16).replace("T", " ")
-                    "bulletin" -> item.text("area").ifBlank { "Toàn thành phố" }
+                    "bulletin", "communication" -> item.text("area").ifBlank { "Toàn thành phố" }
                     else -> "${item.optJSONArray("options")?.length() ?: 0} lựa chọn"
                 }
                 Text(
@@ -852,7 +855,7 @@ private fun StatusPill(item: JSONObject, kind: String) {
                 else -> Triple(item.text("state").ifBlank { "Ghi nhận" }, OpenCityColors.SurfaceBg, OpenCityColors.TextSecondary)
             }
         }
-        "bulletin" -> {
+        "bulletin", "communication" -> {
             if (item.text("category") == "alert") Triple("Khẩn cấp", OpenCityColors.BrandRedLight, OpenCityColors.BrandRedDark)
             else Triple("Công khai", OpenCityColors.BrandMintLight, OpenCityColors.BrandMintDark)
         }
@@ -891,6 +894,7 @@ fun DetailScreen(
     val path = when (kind) {
         "report" -> "/reports/$id"
         "bulletin" -> "/bulletins/$id"
+        "communication" -> "/communications/$id"
         else -> "/surveys/$id"
     }
 
@@ -968,6 +972,7 @@ fun DetailScreen(
                     val badgeText = when (kind) {
                         "report" -> "HỒ SƠ PHẢN ÁNH #${id.take(8).uppercase()}"
                         "bulletin" -> if (data.text("category") == "alert") "⚠️ CẢNH BÁO AN TOÀN" else "📰 BẢN TIN ĐÔ THỊ"
+                        "communication" -> "THÔNG TIN TRUYỀN THÔNG"
                         else -> "📊 KHẢO SÁT Ý KIẾN"
                     }
                     Text(
@@ -1015,9 +1020,9 @@ fun DetailScreen(
                             InfoRow(icon = Icons.Default.MyLocation, label = "Tọa độ GPS", value = "%.5f, %.5f".format(lat, lon))
                         }
                     }
-                    "bulletin" -> {
+                    "bulletin", "communication" -> {
                         InfoRow(icon = Icons.Default.LocationCity, label = "Khu vực áp dụng", value = data.text("area").ifBlank { "Toàn thành phố" })
-                        InfoRow(icon = Icons.Default.Schedule, label = "Thời gian phát", value = data.text("created_at").take(16).replace("T", " "))
+                        InfoRow(icon = Icons.Default.Schedule, label = "Thời gian phát", value = data.text("published_at").take(16).replace("T", " "))
                     }
                     else -> {
                         InfoRow(icon = Icons.Default.CheckCircle, label = "Tình trạng", value = if (data.text("status") == "open") "Đang lấy ý kiến cư dân" else "Đã đóng biểu quyết")
@@ -1104,7 +1109,7 @@ fun DetailScreen(
                 }
             }
 
-            "bulletin" -> {
+            "bulletin", "communication" -> {
                 Surface(
                     color = Color.White,
                     shape = RoundedCornerShape(18.dp),
@@ -1131,7 +1136,7 @@ fun DetailScreen(
                         }
 
                         Text(
-                            text = "Chi tiết bản tin",
+                            text = if (kind == "communication") "Nội dung truyền thông" else "Chi tiết bản tin",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = OpenCityColors.TextMain
@@ -1748,7 +1753,7 @@ fun CatalogScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
 
                                 val isAvailable = service.text("status") == "available"
                                 val route = service.text("route").removePrefix("/")
-                                val canNavigate = isAvailable && route in setOf("reports", "news", "map", "surveys", "appointments", "administrative-feedback", "hotlines")
+                                val canNavigate = isAvailable && route in setOf("reports", "news", "map", "surveys", "appointments", "administrative-feedback", "hotlines", "communications")
 
                                 Row(
                                     modifier = Modifier
