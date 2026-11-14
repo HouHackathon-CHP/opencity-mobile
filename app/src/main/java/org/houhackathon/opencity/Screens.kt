@@ -242,6 +242,7 @@ private fun FeatureItem(
 fun HomeScreen(
     api: ApiClient,
     revision: Int,
+    signedIn: Boolean,
     onNavigate: (String) -> Unit,
     onDetail: (String, String) -> Unit
 ) {
@@ -250,11 +251,11 @@ fun HomeScreen(
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(revision) {
+    LaunchedEffect(revision, signedIn) {
         loading = true
         try {
             bulletins = api.list("/bulletins").take(3)
-            reports = api.list("/reports").take(3)
+            reports = if (signedIn) api.list("/reports").take(3) else emptyList()
             error = null
         } catch (e: Exception) {
             error = e.message

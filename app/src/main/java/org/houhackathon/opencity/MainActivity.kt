@@ -264,13 +264,16 @@ private fun OpenCityApp(
                 }
 
                 // Main Navigation Routing
-                if (!signedIn && page != "account") {
+                val publicPage = page in setOf("home", "news", "hotlines", "catalog", "account") ||
+                    (page == "detail" && detailKind == "bulletin")
+                if (!signedIn && !publicPage) {
                     WelcomeScreen(login = login, modifier = Modifier.fillMaxSize())
                 } else {
                     when (page) {
                         "home" -> HomeScreen(
                             api = api,
                             revision = revision,
+                            signedIn = signedIn,
                             onNavigate = { page = it },
                             onDetail = { kind, id ->
                                 detailKind = kind
