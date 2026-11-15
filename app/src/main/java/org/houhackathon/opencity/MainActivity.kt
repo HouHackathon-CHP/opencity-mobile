@@ -76,6 +76,7 @@ private fun OpenCityApp(
     var revision by remember { mutableIntStateOf(0) }
     var notificationReturnPage by remember { mutableStateOf("home") }
     var unreadNotifications by remember { mutableIntStateOf(0) }
+    var guestMode by remember { mutableStateOf(false) }
     val signedIn = auth.signedIn
     val rootPages = setOf("home", "reports", "news", "map", "account")
 
@@ -105,7 +106,12 @@ private fun OpenCityApp(
                         modifier = Modifier
                             .fillMaxWidth()
                             .statusBarsPadding()
-                            .padding(horizontal = 18.dp, vertical = 12.dp),
+                            .padding(
+                                start = if (page in rootPages) 18.dp else 6.dp,
+                                end = 18.dp,
+                                top = 8.dp,
+                                bottom = 8.dp
+                            ),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
@@ -164,6 +170,7 @@ private fun OpenCityApp(
                                             "surveys" -> "home"
                                             "appointments" -> "home"
                                             "administrative-feedback" -> "home"
+                                            "air-quality" -> "home"
                                             "hotlines" -> "home"
                                             "communications" -> "home"
                                             "community-groups" -> "home"
@@ -264,8 +271,12 @@ private fun OpenCityApp(
                 }
 
                 // Main Navigation Routing
-                if (!signedIn && page != "account") {
-                    WelcomeScreen(login = login, modifier = Modifier.fillMaxSize())
+                if (!signedIn && !guestMode && page != "account") {
+                    WelcomeScreen(
+                        login = login,
+                        onExplore = { guestMode = true },
+                        modifier = Modifier.fillMaxSize()
+                    )
                 } else {
                     when (page) {
                         "home" -> HomeScreen(
@@ -323,6 +334,7 @@ private fun OpenCityApp(
                         )
                         "appointments" -> AppointmentsScreen(api = api, revision = revision)
                         "administrative-feedback" -> AdministrativeFeedbackScreen(api = api, revision = revision)
+                        "air-quality" -> AirQualityScreen(api = api, revision = revision)
                         "hotlines" -> HotlinesScreen(api = api, revision = revision)
                         "communications" -> ListScreen(api = api, path = "/communications", title = "Thông tin truyền thông", revision = revision,
                             onClick = { detailKind = "communication"; detailId = it; page = "detail" })
@@ -402,6 +414,7 @@ private fun pageTitle(page: String, detailKind: String = ""): String = when (pag
     "surveys" -> "Khảo sát ý kiến"
     "appointments" -> "Tiếp công dân"
     "administrative-feedback" -> "Phản ánh thủ tục hành chính"
+    "air-quality" -> "Chất lượng không khí VN-AQI"
     "hotlines" -> "Đường dây nóng"
     "communications" -> "Thông tin truyền thông"
     "community-groups" -> "Nhóm cộng đồng"
