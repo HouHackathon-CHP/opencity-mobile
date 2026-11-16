@@ -337,8 +337,8 @@ private fun OpenCityApp(
                         "appointments" -> AppointmentsScreen(api = api, revision = revision)
                         "administrative-feedback" -> AdministrativeFeedbackScreen(api = api, revision = revision)
                         "air-quality" -> AirQualityScreen(api = api, revision = revision)
-                        "find-bus" -> BusNetworkScreen(api = api, revision = revision)
-                        "bus-routes" -> BusNetworkScreen(api = api, revision = revision)
+                        "find-bus" -> BusNetworkScreen(api = api, revision = revision, initialTab = "plan")
+                        "bus-routes" -> BusNetworkScreen(api = api, revision = revision, initialTab = "routes")
                         "hotlines" -> HotlinesScreen(api = api, revision = revision)
                         "communications" -> ListScreen(api = api, path = "/communications", title = "Thông tin truyền thông", revision = revision,
                             onClick = { detailKind = "communication"; detailId = it; page = "detail" })
