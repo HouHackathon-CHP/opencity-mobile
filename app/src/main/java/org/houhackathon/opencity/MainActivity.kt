@@ -171,6 +171,8 @@ private fun OpenCityApp(
                                             "appointments" -> "home"
                                             "administrative-feedback" -> "home"
                                             "air-quality" -> "home"
+                                            "find-bus" -> "home"
+                                            "bus-routes" -> "home"
                                             "hotlines" -> "home"
                                             "communications" -> "home"
                                             "community-groups" -> "home"
@@ -335,6 +337,8 @@ private fun OpenCityApp(
                         "appointments" -> AppointmentsScreen(api = api, revision = revision)
                         "administrative-feedback" -> AdministrativeFeedbackScreen(api = api, revision = revision)
                         "air-quality" -> AirQualityScreen(api = api, revision = revision)
+                        "find-bus" -> BusNetworkScreen(api = api, revision = revision)
+                        "bus-routes" -> BusNetworkScreen(api = api, revision = revision)
                         "hotlines" -> HotlinesScreen(api = api, revision = revision)
                         "communications" -> ListScreen(api = api, path = "/communications", title = "Thông tin truyền thông", revision = revision,
                             onClick = { detailKind = "communication"; detailId = it; page = "detail" })
@@ -415,6 +419,8 @@ private fun pageTitle(page: String, detailKind: String = ""): String = when (pag
     "appointments" -> "Tiếp công dân"
     "administrative-feedback" -> "Phản ánh thủ tục hành chính"
     "air-quality" -> "Chất lượng không khí VN-AQI"
+    "find-bus" -> "Mạng lưới xe buýt"
+    "bus-routes" -> "Mạng lưới xe buýt"
     "hotlines" -> "Đường dây nóng"
     "communications" -> "Thông tin truyền thông"
     "community-groups" -> "Nhóm cộng đồng"

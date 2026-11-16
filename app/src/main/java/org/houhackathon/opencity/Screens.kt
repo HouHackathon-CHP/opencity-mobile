@@ -393,6 +393,7 @@ fun HomeScreen(
 
         Spacer(Modifier.height(10.dp))
 
+        // Grid hàng 1: Phản ánh, Bản đồ số, Khảo sát
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -421,6 +422,50 @@ fun HomeScreen(
                 label = "Khảo sát",
                 onClick = { onNavigate("surveys") }
             )
+        }
+
+        Spacer(Modifier.height(10.dp))
+
+        // Grid hàng 2: Không khí (AQI), Xe buýt, Danh mục
+        val avgAqi = airSummary?.let { air ->
+            if (air.has("average_aqi") && !air.isNull("average_aqi")) air.optInt("average_aqi") else null
+        }
+        val cls = airSummary?.optJSONObject("classification")
+        val level = cls?.optString("level")?.takeUnless { it == "null" } ?: "moderate"
+        val aqiColor = when (level.lowercase()) {
+            "good" -> Color(0xFF10B981)
+            "moderate" -> Color(0xFFF59E0B)
+            "unhealthy_sensitive" -> Color(0xFFF97316)
+            "unhealthy" -> Color(0xFFEF4444)
+            "very_unhealthy" -> Color(0xFF8B5CF6)
+            "hazardous" -> Color(0xFF7F1D1D)
+            else -> Color(0xFFF59E0B)
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            ShortcutTile(
+                modifier = Modifier.weight(1f),
+                icon = Icons.Default.Air,
+                iconColor = aqiColor,
+                iconBg = aqiColor.copy(alpha = 0.12f),
+                label = "Không khí",
+                badgeText = if (avgAqi != null) "$avgAqi" else "83",
+                badgeColor = aqiColor,
+                onClick = { onNavigate("air-quality") }
+            )
+            ShortcutTile(
+                modifier = Modifier.weight(1f),
+                icon = Icons.Default.DirectionsBus,
+                iconColor = OpenCityColors.BrandAzure,
+                iconBg = OpenCityColors.BrandAzureLight,
+                label = "Xe buýt",
+                badgeText = "184",
+                badgeColor = OpenCityColors.BrandAzure,
+                onClick = { onNavigate("find-bus") }
+            )
             ShortcutTile(
                 modifier = Modifier.weight(1f),
                 icon = Icons.Default.Category,
@@ -429,102 +474,6 @@ fun HomeScreen(
                 label = "Danh mục",
                 onClick = { onNavigate("catalog") }
             )
-        }
-
-        // Air Quality Live Preview Widget
-        airSummary?.let { air ->
-            val avgAqi = if (air.has("average_aqi") && !air.isNull("average_aqi")) air.optInt("average_aqi") else null
-            val cls = air.optJSONObject("classification")
-            val label = cls?.optString("label")?.takeUnless { it == "null" } ?: "Đang cập nhật"
-            val level = cls?.optString("level")?.takeUnless { it == "null" } ?: "moderate"
-            val aqiColor = when (level.lowercase()) {
-                "good" -> Color(0xFF10B981)
-                "moderate" -> Color(0xFFF59E0B)
-                "unhealthy_sensitive" -> Color(0xFFF97316)
-                "unhealthy" -> Color(0xFFEF4444)
-                "very_unhealthy" -> Color(0xFF8B5CF6)
-                "hazardous" -> Color(0xFF7F1D1D)
-                else -> OpenCityColors.BrandAzure
-            }
-
-            Spacer(Modifier.height(14.dp))
-
-            Surface(
-                color = OpenCityColors.CardBg,
-                shape = RoundedCornerShape(16.dp),
-                border = BorderStroke(1.dp, aqiColor.copy(alpha = 0.35f)),
-                shadowElevation = 2.dp,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onNavigate("air-quality") }
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Surface(
-                            color = aqiColor.copy(alpha = 0.12f),
-                            shape = CircleShape,
-                            modifier = Modifier.size(42.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.Air,
-                                    contentDescription = null,
-                                    tint = aqiColor,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            }
-                        }
-
-                        Column {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Text(
-                                    text = "Không khí VN-AQI",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = OpenCityColors.TextMain
-                                )
-                                Surface(
-                                    color = aqiColor.copy(alpha = 0.15f),
-                                    shape = RoundedCornerShape(6.dp)
-                                ) {
-                                    Text(
-                                        text = label,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = aqiColor,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                    )
-                                }
-                            }
-                            Text(
-                                text = if (avgAqi != null) "Chỉ số trung bình Thủ đô: $avgAqi AQI • Chạm xem chi tiết" else "Đang cập nhật chỉ số mạng lưới trạm",
-                                fontSize = 12.sp,
-                                color = OpenCityColors.TextSecondary
-                            )
-                        }
-                    }
-
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = "Xem chi tiết",
-                        tint = OpenCityColors.BrandAzure,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
         }
 
         error?.let {
@@ -623,6 +572,8 @@ private fun ShortcutTile(
     iconColor: Color,
     iconBg: Color,
     label: String,
+    badgeText: String? = null,
+    badgeColor: Color = OpenCityColors.BrandAzure,
     onClick: () -> Unit
 ) {
     Surface(
@@ -633,23 +584,40 @@ private fun ShortcutTile(
         shadowElevation = 1.dp
     ) {
         Column(
-            modifier = Modifier.padding(vertical = 14.dp, horizontal = 8.dp),
+            modifier = Modifier.padding(vertical = 12.dp, horizontal = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Box(
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(CircleShape)
-                    .background(iconBg),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(imageVector = icon, contentDescription = label, tint = iconColor, modifier = Modifier.size(20.dp))
+            Box(contentAlignment = Alignment.TopEnd) {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(CircleShape)
+                        .background(iconBg),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(imageVector = icon, contentDescription = label, tint = iconColor, modifier = Modifier.size(20.dp))
+                }
+                if (badgeText != null) {
+                    Surface(
+                        color = badgeColor,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.offset(x = 6.dp, y = (-4).dp)
+                    ) {
+                        Text(
+                            text = badgeText,
+                            fontSize = 8.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                        )
+                    }
+                }
             }
             Spacer(Modifier.height(8.dp))
             Text(
                 text = label,
-                fontSize = 12.sp,
+                fontSize = 12.5.sp,
                 fontWeight = FontWeight.Bold,
                 color = OpenCityColors.TextMain,
                 maxLines = 1,
@@ -1879,7 +1847,7 @@ fun CatalogScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
                                 val route = service.text("route").removePrefix("/")
                                 val canNavigate = isAvailable && route in setOf(
                                     "reports", "news", "map", "surveys", "appointments",
-                                    "administrative-feedback", "air-quality", "hotlines",
+                                    "administrative-feedback", "air-quality", "find-bus", "bus-routes", "hotlines",
                                     "communications", "community-groups", "social-feedback", "digital-wards"
                                 )
 
