@@ -94,10 +94,22 @@ class AuthManager(context: Context) {
     }
 
     fun completeSignIn(intent: Intent?, done: (String?) -> Unit) {
-        if (intent == null) { done("Đăng nhập đã bị hủy."); return }
+        if (intent == null) { done(null); return }
         val response = AuthorizationResponse.fromIntent(intent)
         val error = AuthorizationException.fromIntent(intent)
-        if (response == null) { done(error?.errorDescription ?: "Đăng nhập chưa hoàn tất."); return }
+        if (response == null) {
+            val desc = error?.errorDescription ?: ""
+            if (desc.contains("User cancelled flow", ignoreCase = true) ||
+                desc.contains("cancelled", ignoreCase = true) ||
+                desc.contains("canceled", ignoreCase = true) ||
+                error?.code == AuthorizationException.GeneralErrors.USER_CANCELED_AUTH_FLOW.code
+            ) {
+                done(null)
+                return
+            }
+            done(error?.errorDescription ?: "Đăng nhập chưa hoàn tất.")
+            return
+        }
         state = AuthState(response, error)
         service.performTokenRequest(response.createTokenExchangeRequest()) { token, failure ->
             state.update(token, failure)

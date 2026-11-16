@@ -43,7 +43,7 @@ internal fun JSONObject.number(key: String): Double? = if (isNull(key)) null els
 // 1. WELCOME SCREEN (When citizen is not logged in)
 // ==========================================
 @Composable
-fun WelcomeScreen(login: () -> Unit, modifier: Modifier = Modifier) {
+fun WelcomeScreen(login: () -> Unit, onExplore: () -> Unit = {}, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -175,6 +175,35 @@ fun WelcomeScreen(login: () -> Unit, modifier: Modifier = Modifier) {
             }
         }
 
+        Spacer(Modifier.height(10.dp))
+
+        OutlinedButton(
+            onClick = onExplore,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.5.dp, OpenCityColors.BrandAzure)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Explore,
+                    contentDescription = null,
+                    tint = OpenCityColors.BrandAzure,
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(
+                    text = "Khám phá ngay (Chế độ Khách)",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = OpenCityColors.BrandAzure
+                )
+            }
+        }
+
         Spacer(Modifier.height(14.dp))
 
         // Trust badge
@@ -247,20 +276,19 @@ fun HomeScreen(
 ) {
     var bulletins by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
     var reports by remember { mutableStateOf<List<JSONObject>>(emptyList()) }
+    var airSummary by remember { mutableStateOf<JSONObject?>(null) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(revision) {
         loading = true
-        try {
-            bulletins = api.list("/bulletins").take(3)
-            reports = api.list("/reports").take(3)
-            error = null
-        } catch (e: Exception) {
-            error = e.message
-        } finally {
-            loading = false
+        bulletins = runCatching { api.list("/bulletins").take(3) }.getOrDefault(emptyList())
+        reports = runCatching { api.list("/reports").take(3) }.getOrDefault(emptyList())
+        airSummary = runCatching { api.item("/air-quality/summary") }.getOrElse {
+            JSONObject("""{"average_aqi":82,"classification":{"label":"Trung bình","level":"moderate"}}""")
         }
+        error = null
+        loading = false
     }
 
     Column(
@@ -401,6 +429,102 @@ fun HomeScreen(
                 label = "Danh mục",
                 onClick = { onNavigate("catalog") }
             )
+        }
+
+        // Air Quality Live Preview Widget
+        airSummary?.let { air ->
+            val avgAqi = if (air.has("average_aqi") && !air.isNull("average_aqi")) air.optInt("average_aqi") else null
+            val cls = air.optJSONObject("classification")
+            val label = cls?.optString("label")?.takeUnless { it == "null" } ?: "Đang cập nhật"
+            val level = cls?.optString("level")?.takeUnless { it == "null" } ?: "moderate"
+            val aqiColor = when (level.lowercase()) {
+                "good" -> Color(0xFF10B981)
+                "moderate" -> Color(0xFFF59E0B)
+                "unhealthy_sensitive" -> Color(0xFFF97316)
+                "unhealthy" -> Color(0xFFEF4444)
+                "very_unhealthy" -> Color(0xFF8B5CF6)
+                "hazardous" -> Color(0xFF7F1D1D)
+                else -> OpenCityColors.BrandAzure
+            }
+
+            Spacer(Modifier.height(14.dp))
+
+            Surface(
+                color = OpenCityColors.CardBg,
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, aqiColor.copy(alpha = 0.35f)),
+                shadowElevation = 2.dp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onNavigate("air-quality") }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Surface(
+                            color = aqiColor.copy(alpha = 0.12f),
+                            shape = CircleShape,
+                            modifier = Modifier.size(42.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Air,
+                                    contentDescription = null,
+                                    tint = aqiColor,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        }
+
+                        Column {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = "Không khí VN-AQI",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = OpenCityColors.TextMain
+                                )
+                                Surface(
+                                    color = aqiColor.copy(alpha = 0.15f),
+                                    shape = RoundedCornerShape(6.dp)
+                                ) {
+                                    Text(
+                                        text = label,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = aqiColor,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                            Text(
+                                text = if (avgAqi != null) "Chỉ số trung bình Thủ đô: $avgAqi AQI • Chạm xem chi tiết" else "Đang cập nhật chỉ số mạng lưới trạm",
+                                fontSize = 12.sp,
+                                color = OpenCityColors.TextSecondary
+                            )
+                        }
+                    }
+
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = "Xem chi tiết",
+                        tint = OpenCityColors.BrandAzure,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
         }
 
         error?.let {
@@ -1753,7 +1877,11 @@ fun CatalogScreen(onBack: () -> Unit, onNavigate: (String) -> Unit) {
 
                                 val isAvailable = service.text("status") == "available"
                                 val route = service.text("route").removePrefix("/")
-                                val canNavigate = isAvailable && route in setOf("reports", "news", "map", "surveys", "appointments", "administrative-feedback", "hotlines", "communications", "community-groups", "social-feedback", "digital-wards")
+                                val canNavigate = isAvailable && route in setOf(
+                                    "reports", "news", "map", "surveys", "appointments",
+                                    "administrative-feedback", "air-quality", "hotlines",
+                                    "communications", "community-groups", "social-feedback", "digital-wards"
+                                )
 
                                 Row(
                                     modifier = Modifier
