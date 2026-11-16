@@ -38,6 +38,9 @@ class MainActivity : ComponentActivity() {
     private val signIn = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         auth.completeSignIn(result.data) { authMessage = it }
     }
+    private val registerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        auth.completeSignIn(result.data) { authMessage = it }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,6 +51,10 @@ class MainActivity : ComponentActivity() {
                 login = {
                     authMessage = null
                     signIn.launch(auth.signInIntent())
+                },
+                register = {
+                    authMessage = null
+                    registerLauncher.launch(auth.registerIntent())
                 },
                 authMessage = authMessage,
                 clearAuthMessage = { authMessage = null }
@@ -67,6 +74,7 @@ private fun OpenCityApp(
     auth: AuthManager,
     api: ApiClient,
     login: () -> Unit,
+    register: () -> Unit,
     authMessage: String?,
     clearAuthMessage: () -> Unit
 ) {
@@ -273,11 +281,14 @@ private fun OpenCityApp(
                 }
 
                 // Main Navigation Routing
-                val publicPage = guestMode || page in setOf("home", "news", "hotlines", "catalog", "account", "bus-network", "air-quality") ||
-                    (page == "detail" && detailKind == "bulletin")
+                val publicPage = guestMode || page in setOf(
+                    "home", "news", "hotlines", "catalog", "account", "bus-network", "air-quality",
+                    "digital-wards", "communications", "community-groups", "surveys"
+                ) || (page == "detail" && detailKind in setOf("bulletin", "communication", "survey"))
                 if (!signedIn && !publicPage) {
                     WelcomeScreen(
                         login = login,
+                        register = register,
                         onExplore = { guestMode = true },
                         modifier = Modifier.fillMaxSize()
                     )
@@ -359,7 +370,9 @@ private fun OpenCityApp(
                         )
                         "account" -> AccountScreen(
                             signedIn = signedIn,
+                            userName = auth.userName,
                             login = login,
+                            register = register,
                             onLogout = {
                                 auth.signOut()
                                 page = "home"
@@ -368,8 +381,11 @@ private fun OpenCityApp(
                             onCatalog = { page = "catalog" }
                         )
                         "catalog" -> CatalogScreen(
+                            signedIn = signedIn,
                             onBack = { page = "home" },
-                            onNavigate = { page = it }
+                            onNavigate = { page = it },
+                            onLogin = login,
+                            onRegister = register
                         )
                         "notifications" -> NotificationsScreen(
                             api = api,

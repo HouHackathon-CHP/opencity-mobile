@@ -18,12 +18,16 @@ class ApiClient(private val context: Context, private val auth: AuthManager) {
     private val http = OkHttpClient.Builder().callTimeout(25, TimeUnit.SECONDS).build()
     private val publicCollections = setOf(
         "/bulletins", "/hotlines", "/air-quality/summary", "/air-quality/stations",
-        "/bus/routes", "/bus/stops", "/bus/find", "/bus/audit"
+        "/bus/routes", "/bus/stops", "/bus/find", "/bus/audit",
+        "/digital-wards", "/communications", "/community-groups", "/surveys"
     )
     private val publicDetails = listOf(
         Regex("^/bulletins/[A-Za-z0-9_.:-]{1,128}$"),
         Regex("^/air-quality/stations/[A-Za-z0-9_.:-]{1,128}$"),
-        Regex("^/bus/(routes|stops)/[A-Za-z0-9_.:-]{1,128}$")
+        Regex("^/bus/(routes|stops)/[A-Za-z0-9_.:-]{1,128}$"),
+        Regex("^/digital-wards/[A-Za-z0-9_.:-]{1,128}$"),
+        Regex("^/communications/[A-Za-z0-9_.:-]{1,128}$"),
+        Regex("^/surveys/[A-Za-z0-9_.:-]{1,128}$")
     )
 
     private fun isPublicRead(path: String): Boolean {

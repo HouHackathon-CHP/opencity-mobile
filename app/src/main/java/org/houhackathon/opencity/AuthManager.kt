@@ -72,14 +72,28 @@ class AuthManager(context: Context) {
     private val store = SessionStore(context.applicationContext)
     private val background = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val http = OkHttpClient.Builder().callTimeout(5, TimeUnit.SECONDS).build()
-    private val configuration = AuthorizationServiceConfiguration(
-        Uri.parse("${BuildConfig.IDENTITY_URL}/realms/dxos/protocol/openid-connect/auth"),
-        Uri.parse("${BuildConfig.IDENTITY_URL}/realms/dxos/protocol/openid-connect/token")
-    )
+    private val identityBaseUrl: String by lazy {
+        BuildConfig.IDENTITY_URL.trimEnd('/')
+    }
+
+    private val configuration by lazy {
+        AuthorizationServiceConfiguration(
+            Uri.parse("${identityBaseUrl}/realms/dxos/protocol/openid-connect/auth"),
+            Uri.parse("${identityBaseUrl}/realms/dxos/protocol/openid-connect/token")
+        )
+    }
+
+    private val registrationConfiguration by lazy {
+        AuthorizationServiceConfiguration(
+            Uri.parse("${identityBaseUrl}/realms/dxos/protocol/openid-connect/registrations"),
+            Uri.parse("${identityBaseUrl}/realms/dxos/protocol/openid-connect/token")
+        )
+    }
+
     // HTTP is accepted only for the local emulator demo. Production URLs must use HTTPS.
     private val service = AuthorizationService(context, AppAuthConfiguration.Builder()
         .setConnectionBuilder(ConnectionBuilder { uri ->
-            require(uri.scheme == "https" || (BuildConfig.DEBUG && uri.host in listOf("127.0.0.1", "localhost")))
+            require(uri.scheme == "https" || (BuildConfig.DEBUG && uri.host in listOf("127.0.0.1", "localhost", "10.0.2.2")))
             URL(uri.toString()).openConnection() as HttpURLConnection
         }).build())
     private var state = try { store.read()?.let { AuthState.jsonDeserialize(it) } ?: AuthState() }
@@ -87,9 +101,37 @@ class AuthManager(context: Context) {
     var signedIn by mutableStateOf(state.isAuthorized)
         private set
 
+    val userName: String?
+        get() {
+            val idToken = state.idToken ?: return null
+            return try {
+                val parts = idToken.split(".")
+                if (parts.size >= 2) {
+                    val raw = Base64.decode(parts[1], Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
+                    val json = org.json.JSONObject(String(raw, Charsets.UTF_8))
+                    json.optString("name").takeIf { it.isNotBlank() }
+                        ?: json.optString("preferred_username").takeIf { it.isNotBlank() }
+                        ?: json.optString("email").takeIf { it.isNotBlank() }
+                } else null
+            } catch (_: Exception) { null }
+        }
+
     fun signInIntent(): Intent {
         val request = AuthorizationRequest.Builder(configuration, "dxos-mobile", ResponseTypeValues.CODE,
             Uri.parse("opencity://auth")).setScope("openid profile email").build()
+        return service.getAuthorizationRequestIntent(request)
+    }
+
+    fun registerIntent(): Intent {
+        val request = AuthorizationRequest.Builder(
+            registrationConfiguration,
+            "dxos-mobile",
+            ResponseTypeValues.CODE,
+            Uri.parse("opencity://auth")
+        )
+            .setScope("openid profile email")
+            .setPrompt("create")
+            .build()
         return service.getAuthorizationRequestIntent(request)
     }
 
@@ -140,7 +182,7 @@ class AuthManager(context: Context) {
             runCatching {
                 val body = FormBody.Builder().add("client_id", "dxos-mobile")
                     .add("token", refreshToken).add("token_type_hint", "refresh_token").build()
-                val req = Request.Builder().url("${BuildConfig.IDENTITY_URL}/realms/dxos/protocol/openid-connect/revoke")
+                val req = Request.Builder().url("${identityBaseUrl}/realms/dxos/protocol/openid-connect/revoke")
                     .post(body).build()
                 http.newCall(req).execute().close()
             }
