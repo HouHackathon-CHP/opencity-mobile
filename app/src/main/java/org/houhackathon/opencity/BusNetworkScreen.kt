@@ -2988,6 +2988,19 @@ private fun BusMapView(
     var mapLibreMap by remember { mutableStateOf<org.maplibre.android.maps.MapLibreMap?>(null) }
     var currentMapZoom by remember { mutableStateOf(13.2) }
 
+    var isDrawerExpanded by remember { mutableStateOf(false) }
+    var selectedStopIndex by remember { mutableStateOf<Int?>(null) }
+    val tripStopsList = remember(tripPlan) {
+        val arr = tripPlan?.optJSONArray("trip_stops")
+        if (arr == null) emptyList() else (0 until arr.length()).map { arr.getJSONObject(it) }
+    }
+    val tripMarkers = remember { mutableListOf<org.maplibre.android.annotations.Marker>() }
+    var lastFittedTripPlanId by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(tripPlan) {
+        selectedStopIndex = null
+    }
+
     var walkingToBoardPath by remember { mutableStateOf<List<LatLng>>(emptyList()) }
     var walkingToDestPath by remember { mutableStateOf<List<LatLng>>(emptyList()) }
     var walkingToBoardDist by remember { mutableStateOf(0) }
@@ -3046,9 +3059,19 @@ private fun BusMapView(
                     Style.Builder().fromUri("https://tiles.openfreemap.org/styles/positron")
                 ) {
                     mapLibreMap = map
+
+                    val initialTarget = selectedStop?.let { sel ->
+                        val lat = sel.doubleOrNull("latitude") ?: 0.0
+                        val lng = sel.doubleOrNull("longitude") ?: 0.0
+                        if (lat != 0.0 && lng != 0.0) LatLng(lat - 0.0012, lng) else null
+                    } ?: LatLng(userCoords.first, userCoords.second)
+
+                    val initialZoom = if (selectedStop != null) 16.2 else 13.2
+                    currentMapZoom = initialZoom
+
                     map.cameraPosition = CameraPosition.Builder()
-                        .target(LatLng(userCoords.first, userCoords.second))
-                        .zoom(13.2)
+                        .target(initialTarget)
+                        .zoom(initialZoom)
                         .tilt(20.0)
                         .bearing(0.0)
                         .build()
@@ -3075,7 +3098,7 @@ private fun BusMapView(
                         }
                         if (found != null) {
                             onSelectStop(found)
-                            map.animateCamera(CameraUpdateFactory.newLatLngZoom(marker.position, 15.0), 600)
+                            map.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(marker.position.latitude - 0.0012, marker.position.longitude), 16.2), 500)
                         }
                         true
                     }
@@ -3084,154 +3107,202 @@ private fun BusMapView(
         }
     }
 
-    LaunchedEffect(stops, mapLibreMap, tripPlan, selectedStop, pickingMode, walkingToBoardPath, walkingToDestPath, currentMapZoom) {
+    LaunchedEffect(selectedStop, mapLibreMap) {
         val map = mapLibreMap ?: return@LaunchedEffect
+        val sel = selectedStop ?: return@LaunchedEffect
+        if (tripPlan != null) return@LaunchedEffect
+        val sLat = sel.doubleOrNull("latitude") ?: return@LaunchedEffect
+        val sLon = sel.doubleOrNull("longitude") ?: return@LaunchedEffect
+        if (sLat == 0.0 || sLon == 0.0) return@LaunchedEffect
+
+        currentMapZoom = 16.2
+        val targetLat = sLat - 0.0012
+        map.animateCamera(
+            CameraUpdateFactory.newLatLngZoom(LatLng(targetLat, sLon), 16.2),
+            600
+        )
+    }
+
+    LaunchedEffect(tripPlan, mapLibreMap, originCoords, destinationCoords, walkingToBoardPath, walkingToDestPath) {
+        val map = mapLibreMap ?: return@LaunchedEffect
+        if (tripPlan == null) return@LaunchedEffect
+
         map.clear()
+        tripMarkers.clear()
 
-        if (tripPlan != null) {
-            if (walkingToBoardPath.isNotEmpty()) {
-                val walkPoly = PolylineOptions()
-                    .addAll(walkingToBoardPath)
-                    .color(android.graphics.Color.parseColor("#10B981"))
-                    .width(5.0f)
-                map.addPolyline(walkPoly)
-            }
+        if (walkingToBoardPath.isNotEmpty()) {
+            val walkPoly = PolylineOptions()
+                .addAll(walkingToBoardPath)
+                .color(android.graphics.Color.parseColor("#10B981"))
+                .width(5.0f)
+            map.addPolyline(walkPoly)
+        }
 
-            val pathArray = tripPlan.optJSONArray("path_segment")
-            val latLngs = mutableListOf<LatLng>()
-            if (pathArray != null) {
-                for (i in 0 until pathArray.length()) {
-                    val pt = pathArray.optJSONArray(i) ?: continue
-                    latLngs.add(LatLng(pt.optDouble(1), pt.optDouble(0)))
-                }
+        val pathArray = tripPlan.optJSONArray("path_segment")
+        val latLngs = mutableListOf<LatLng>()
+        if (pathArray != null) {
+            for (i in 0 until pathArray.length()) {
+                val pt = pathArray.optJSONArray(i) ?: continue
+                latLngs.add(LatLng(pt.optDouble(1), pt.optDouble(0)))
             }
-            if (latLngs.isNotEmpty()) {
-                val poly = PolylineOptions()
-                    .addAll(latLngs)
-                    .color(android.graphics.Color.parseColor("#2563EB"))
-                    .width(6.0f)
-                map.addPolyline(poly)
-            }
+        }
+        if (latLngs.isNotEmpty()) {
+            val poly = PolylineOptions()
+                .addAll(latLngs)
+                .color(android.graphics.Color.parseColor("#2563EB"))
+                .width(6.0f)
+            map.addPolyline(poly)
+        }
 
-            if (walkingToDestPath.isNotEmpty()) {
-                val destWalkPoly = PolylineOptions()
-                    .addAll(walkingToDestPath)
-                    .color(android.graphics.Color.parseColor("#10B981"))
-                    .width(5.0f)
-                map.addPolyline(destWalkPoly)
-            }
+        if (walkingToDestPath.isNotEmpty()) {
+            val destWalkPoly = PolylineOptions()
+                .addAll(walkingToDestPath)
+                .color(android.graphics.Color.parseColor("#10B981"))
+                .width(5.0f)
+            map.addPolyline(destWalkPoly)
+        }
 
-            val userIcon = IconFactory.getInstance(context).fromBitmap(createUserLocationMarkerBitmap(context))
+        val userIcon = IconFactory.getInstance(context).fromBitmap(createUserLocationMarkerBitmap(context))
+        map.addMarker(
+            MarkerOptions()
+                .position(LatLng(originCoords.first, originCoords.second))
+                .title(if (originCoords == userCoords) "Vị trí của bạn (Bắt đầu)" else "Điểm xuất phát")
+                .snippet(if (walkingToBoardDist > 0) "Đi bộ ~$walkingToBoardDist m đến trạm đón" else "Điểm bắt đầu hành trình")
+                .icon(userIcon)
+        )
+
+        if (originCoords != userCoords && userCoords.first != 0.0 && userCoords.second != 0.0) {
             map.addMarker(
                 MarkerOptions()
-                    .position(LatLng(originCoords.first, originCoords.second))
-                    .title(if (originCoords == userCoords) "Vị trí của bạn (Bắt đầu)" else "Điểm xuất phát")
-                    .snippet(if (walkingToBoardDist > 0) "Đi bộ ~$walkingToBoardDist m đến trạm đón" else "Điểm bắt đầu hành trình")
+                    .position(LatLng(userCoords.first, userCoords.second))
+                    .title("Vị trí GPS của bạn")
+                    .snippet("Tọa độ hiện tại")
                     .icon(userIcon)
             )
+        }
 
-            if (originCoords != userCoords && userCoords.first != 0.0 && userCoords.second != 0.0) {
-                map.addMarker(
-                    MarkerOptions()
-                        .position(LatLng(userCoords.first, userCoords.second))
-                        .title("Vị trí GPS của bạn")
-                        .snippet("Tọa độ hiện tại")
-                        .icon(userIcon)
+        if (destinationCoords != null && destinationCoords.first != 0.0 && destinationCoords.second != 0.0) {
+            map.addMarker(
+                MarkerOptions()
+                    .position(LatLng(destinationCoords.first, destinationCoords.second))
+                    .title("Điểm đến của bạn")
+                    .snippet(if (walkingToDestDist > 0) "Đi bộ ~$walkingToDestDist m từ trạm xuống" else "Đích đến hành trình")
+                    .icon(IconFactory.getInstance(context).fromBitmap(createDestinationMarkerBitmap(context)))
+            )
+        }
+
+        val tripStopsArr = tripPlan.optJSONArray("trip_stops")
+        val boardStop = tripPlan.optJSONObject("board_stop")
+        val alightStop = tripPlan.optJSONObject("alight_stop")
+        val transferStop = tripPlan.optJSONObject("transfer_stop")
+
+        if (tripStopsArr != null && tripStopsArr.length() > 0) {
+            for (i in 0 until tripStopsArr.length()) {
+                val st = tripStopsArr.optJSONObject(i) ?: continue
+                val sLat = st.optDouble("latitude")
+                val sLng = st.optDouble("longitude")
+                if (sLat == 0.0 || sLng == 0.0) continue
+
+                val sName = st.optString("name")
+                val sAddr = st.optString("address")
+                val isFirst = (i == 0)
+                val isLast = (i == tripStopsArr.length() - 1)
+                val isTransfer = transferStop != null && (
+                    (transferStop.optString("name").isNotBlank() && transferStop.optString("name") == sName) ||
+                    (Math.abs(transferStop.optDouble("latitude") - sLat) < 0.0003 && Math.abs(transferStop.optDouble("longitude") - sLng) < 0.0003)
                 )
-            }
 
-            if (destinationCoords != null && destinationCoords.first != 0.0 && destinationCoords.second != 0.0) {
-                map.addMarker(
+                val markerBitmap = createIntermediateStopMarkerBitmap(context, i + 1)
+
+                val prefix = when {
+                    isFirst -> "1. Trạm đón: "
+                    isLast -> "${i + 1}. Trạm xuống: "
+                    isTransfer -> "${i + 1}. Chuyển tuyến: "
+                    else -> "${i + 1}. "
+                }
+
+                val marker = map.addMarker(
                     MarkerOptions()
-                        .position(LatLng(destinationCoords.first, destinationCoords.second))
-                        .title("Điểm đến của bạn")
-                        .snippet(if (walkingToDestDist > 0) "Đi bộ ~$walkingToDestDist m từ trạm xuống" else "Đích đến hành trình")
-                        .icon(IconFactory.getInstance(context).fromBitmap(createDestinationMarkerBitmap(context)))
+                        .position(LatLng(sLat, sLng))
+                        .title("$prefix$sName")
+                        .snippet(sAddr.ifBlank { "Hà Nội" })
+                        .icon(IconFactory.getInstance(context).fromBitmap(markerBitmap))
                 )
+                tripMarkers.add(marker)
             }
-
-            val tripStopsArr = tripPlan.optJSONArray("trip_stops")
-            val boardStop = tripPlan.optJSONObject("board_stop")
-            val alightStop = tripPlan.optJSONObject("alight_stop")
-            val transferStop = tripPlan.optJSONObject("transfer_stop")
-
-            if (tripStopsArr != null && tripStopsArr.length() > 0) {
-                for (i in 0 until tripStopsArr.length()) {
-                    val st = tripStopsArr.optJSONObject(i) ?: continue
-                    val sLat = st.optDouble("latitude")
-                    val sLng = st.optDouble("longitude")
-                    if (sLat == 0.0 || sLng == 0.0) continue
-
-                    val sName = st.optString("name")
-                    val sAddr = st.optString("address")
-                    val isFirst = (i == 0)
-                    val isLast = (i == tripStopsArr.length() - 1)
-                    val isTransfer = transferStop != null && (
-                        (transferStop.optString("name").isNotBlank() && transferStop.optString("name") == sName) ||
-                        (Math.abs(transferStop.optDouble("latitude") - sLat) < 0.0003 && Math.abs(transferStop.optDouble("longitude") - sLng) < 0.0003)
-                    )
-
-                    val markerBitmap = createIntermediateStopMarkerBitmap(context, i + 1)
-
-                    val prefix = when {
-                        isFirst -> "1. Trạm đón: "
-                        isLast -> "${i + 1}. Trạm xuống: "
-                        isTransfer -> "${i + 1}. Chuyển tuyến: "
-                        else -> "${i + 1}. "
-                    }
-
-                    map.addMarker(
+        } else {
+            val busStopIcon = IconFactory.getInstance(context).fromBitmap(createBusStopMarkerBitmap(context))
+            if (boardStop != null) {
+                val bLat = boardStop.optDouble("latitude")
+                val bLng = boardStop.optDouble("longitude")
+                if (bLat != 0.0 && bLng != 0.0) {
+                    val m = map.addMarker(
                         MarkerOptions()
-                            .position(LatLng(sLat, sLng))
-                            .title("$prefix$sName")
-                            .snippet(sAddr.ifBlank { "Trạm xe buýt" })
-                            .icon(IconFactory.getInstance(context).fromBitmap(markerBitmap))
+                            .position(LatLng(bLat, bLng))
+                            .title("Trạm đón: " + boardStop.optString("name"))
+                            .snippet(boardStop.optString("address"))
+                            .icon(busStopIcon)
                     )
-                }
-            } else {
-                val busStopIcon = IconFactory.getInstance(context).fromBitmap(createBusStopMarkerBitmap(context))
-                if (boardStop != null) {
-                    val bLat = boardStop.optDouble("latitude")
-                    val bLng = boardStop.optDouble("longitude")
-                    if (bLat != 0.0 && bLng != 0.0) {
-                        map.addMarker(
-                            MarkerOptions()
-                                .position(LatLng(bLat, bLng))
-                                .title("Trạm đón: " + boardStop.optString("name"))
-                                .snippet(boardStop.optString("address"))
-                                .icon(busStopIcon)
-                        )
-                    }
-                }
-
-                if (transferStop != null) {
-                    val tLat = transferStop.optDouble("latitude")
-                    val tLng = transferStop.optDouble("longitude")
-                    if (tLat != 0.0 && tLng != 0.0) {
-                        map.addMarker(
-                            MarkerOptions()
-                                .position(LatLng(tLat, tLng))
-                                .title("Chuyển tuyến tại: " + transferStop.optString("name"))
-                                .snippet(transferStop.optString("address"))
-                                .icon(busStopIcon)
-                        )
-                    }
-                }
-
-                if (alightStop != null) {
-                    val aLat = alightStop.optDouble("latitude")
-                    val aLng = alightStop.optDouble("longitude")
-                    if (aLat != 0.0 && aLng != 0.0) {
-                        map.addMarker(
-                            MarkerOptions()
-                                .position(LatLng(aLat, aLng))
-                                .title("Trạm xuống: " + alightStop.optString("name"))
-                                .snippet(alightStop.optString("address"))
-                                .icon(busStopIcon)
-                        )
-                    }
+                    tripMarkers.add(m)
                 }
             }
+
+            if (transferStop != null) {
+                val tLat = transferStop.optDouble("latitude")
+                val tLng = transferStop.optDouble("longitude")
+                if (tLat != 0.0 && tLng != 0.0) {
+                    val m = map.addMarker(
+                        MarkerOptions()
+                            .position(LatLng(tLat, tLng))
+                            .title("Chuyển tuyến tại: " + transferStop.optString("name"))
+                            .snippet(transferStop.optString("address"))
+                            .icon(busStopIcon)
+                    )
+                    tripMarkers.add(m)
+                }
+            }
+
+            if (alightStop != null) {
+                val aLat = alightStop.optDouble("latitude")
+                val aLng = alightStop.optDouble("longitude")
+                if (aLat != 0.0 && aLng != 0.0) {
+                    val m = map.addMarker(
+                        MarkerOptions()
+                            .position(LatLng(aLat, aLng))
+                            .title("Trạm xuống: " + alightStop.optString("name"))
+                            .snippet(alightStop.optString("address"))
+                            .icon(busStopIcon)
+                    )
+                    tripMarkers.add(m)
+                }
+            }
+        }
+
+        // Bấm trực tiếp vào trạm trên bản đồ lộ trình: hiện InfoWindow và zoom cận cảnh vào trạm đó
+        map.setOnMarkerClickListener { marker ->
+            val pos = marker.position
+            val foundIdx = tripStopsList.indexOfFirst { st ->
+                val lat = st.optDouble("latitude")
+                val lng = st.optDouble("longitude")
+                Math.abs(lat - pos.latitude) < 0.0003 &&
+                        Math.abs(lng - pos.longitude) < 0.0003
+            }
+            if (foundIdx != -1) {
+                selectedStopIndex = foundIdx
+                val stopObj = tripStopsList[foundIdx]
+                val sLat = stopObj.optDouble("latitude")
+                val sLng = stopObj.optDouble("longitude")
+                if (sLat != 0.0 && sLng != 0.0) {
+                    map.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(sLat - 0.0012, sLng), 16.5), 500)
+                }
+            }
+            map.selectMarker(marker)
+            true
+        }
+
+        val tripKey = "${tripPlan.optString("route_number")}_${tripPlan.optString("first_route_number")}_${tripStopsList.size}"
+        if (lastFittedTripPlanId != tripKey) {
+            lastFittedTripPlanId = tripKey
 
             val boundsBuilder = LatLngBounds.Builder()
             var hasPoints = false
@@ -3257,7 +3328,16 @@ private fun BusMapView(
                     map.animateCamera(CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 120), 800)
                 }
             }
-        } else {
+        }
+    }
+
+    LaunchedEffect(stops, mapLibreMap, tripPlan, selectedStop, pickingMode, currentMapZoom, userCoords) {
+        val map = mapLibreMap ?: return@LaunchedEffect
+        if (tripPlan != null) return@LaunchedEffect
+
+        lastFittedTripPlanId = null
+        tripMarkers.clear()
+        map.clear()
             val userIcon = IconFactory.getInstance(context).fromBitmap(createUserLocationMarkerBitmap(context))
             map.addMarker(
                 MarkerOptions()
@@ -3270,6 +3350,8 @@ private fun BusMapView(
             if (pickingMode == null) {
                 val clusters = clusterStops(stops.take(250), currentMapZoom)
                 val stopIcon = IconFactory.getInstance(context).fromBitmap(createBusStopMarkerBitmap(context))
+                val selLat = selectedStop?.doubleOrNull("latitude") ?: 0.0
+                val selLon = selectedStop?.doubleOrNull("longitude") ?: 0.0
 
                 clusters.forEach { cl ->
                     if (cl.stops.size == 1) {
@@ -3277,6 +3359,10 @@ private fun BusMapView(
                         val lat = st.doubleOrNull("latitude") ?: return@forEach
                         val lon = st.doubleOrNull("longitude") ?: return@forEach
                         val name = st.text("name")
+
+                        if (selectedStop != null && Math.abs(lat - selLat) < 0.0003 && Math.abs(lon - selLon) < 0.0003) {
+                            return@forEach
+                        }
 
                         map.addMarker(
                             MarkerOptions()
@@ -3303,15 +3389,16 @@ private fun BusMapView(
                 val sLat = sel.doubleOrNull("latitude")
                 val sLon = sel.doubleOrNull("longitude")
                 if (sLat != null && sLon != null) {
+                    val stopName = sel.text("name")
                     val pin = when (pickingMode) {
                         "origin" -> createOriginMarkerBitmap(context)
                         "destination" -> createDestinationMarkerBitmap(context)
-                        else -> createSelectedBusStopMarkerBitmap(context)
+                        else -> createSelectedBusStopMarkerBitmap(context, stopName)
                     }
                     map.addMarker(
                         MarkerOptions()
                             .position(LatLng(sLat, sLon))
-                            .title(if (pickingMode != null) (if (pickingMode == "origin") "Điểm đi đã chọn" else "Điểm đến đã chọn") else sel.text("name"))
+                            .title(if (pickingMode != null) (if (pickingMode == "origin") "Điểm đi đã chọn" else "Điểm đến đã chọn") else stopName)
                             .snippet(sel.text("address"))
                             .icon(IconFactory.getInstance(context).fromBitmap(pin))
                     )
@@ -3335,7 +3422,7 @@ private fun BusMapView(
                 }
                 if (found != null) {
                     onSelectStop(found)
-                    map.animateCamera(CameraUpdateFactory.newLatLngZoom(marker.position, 15.5), 500)
+                    map.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(marker.position.latitude - 0.0012, marker.position.longitude), 16.2), 500)
                 }
                 true
             }
@@ -3378,7 +3465,6 @@ private fun BusMapView(
                 }
                 true
             }
-        }
     }
 
     DisposableEffect(lifecycleOwner) {
@@ -3397,13 +3483,6 @@ private fun BusMapView(
             lifecycleOwner.lifecycle.removeObserver(observer)
             mapView.onDestroy()
         }
-    }
-
-    var isDrawerExpanded by remember { mutableStateOf(false) }
-    var selectedStopIndex by remember { mutableStateOf<Int?>(null) }
-    val tripStopsList = remember(tripPlan) {
-        val arr = tripPlan?.optJSONArray("trip_stops")
-        if (arr == null) emptyList() else (0 until arr.length()).map { arr.getJSONObject(it) }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -3465,6 +3544,19 @@ private fun BusMapView(
             val totalWalkDist = walkingToBoardDist + walkingToDestDist
             val walkMins = Math.max(1, (totalWalkDist / 75.0).toInt())
 
+            val walkDistFormatted = when {
+                totalWalkDist >= 1000 -> String.format(java.util.Locale.US, "%.1f km", totalWalkDist / 1000.0)
+                else -> "$totalWalkDist m"
+            }
+            val walkTimeFormatted = when {
+                walkMins >= 60 -> "${walkMins / 60}h${(walkMins % 60).toString().padStart(2, '0')}'"
+                else -> "$walkMins phút"
+            }
+            val co2Formatted = when {
+                co2 >= 1000 -> String.format(java.util.Locale.US, "%.1f kg", co2 / 1000.0)
+                else -> "${co2}g"
+            }
+
             Surface(
                 color = OpenCityColors.CardBg,
                 shape = RoundedCornerShape(16.dp),
@@ -3475,96 +3567,112 @@ private fun BusMapView(
                     .padding(horizontal = 14.dp, vertical = 10.dp)
                     .align(Alignment.TopCenter)
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                Column(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Surface(
-                            color = if (isTransfer) Color(0xFFF59E0B) else Color(0xFF2563EB),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Text(
-                                text = if (isTransfer) "$routeNum → $secondRouteNum" else routeNum,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color.White,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                            )
-                        }
-
-                        Column {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Text(
-                                    text = "~$estMins phút • $stCount trạm",
-                                    fontSize = 12.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = OpenCityColors.TextMain
-                                )
-                                if (totalWalkDist > 0) {
-                                    Surface(
-                                        color = Color(0xFF10B981).copy(alpha = 0.15f),
-                                        shape = RoundedCornerShape(4.dp)
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(2.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.AutoMirrored.Filled.DirectionsRun,
-                                                contentDescription = null,
-                                                tint = Color(0xFF047857),
-                                                modifier = Modifier.size(11.dp)
-                                            )
-                                            Text(
-                                                text = "Đi bộ ~${totalWalkDist}m (~$walkMins')",
-                                                fontSize = 10.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = Color(0xFF047857)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                            Text(
-                                text = "Giảm ~${co2}g CO₂",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = Color(0xFF166534)
-                            )
-                        }
-                    }
-
-                    OutlinedButton(
-                        onClick = onClearTripPlan,
-                        shape = RoundedCornerShape(10.dp),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                        border = BorderStroke(1.dp, OpenCityColors.BorderColor),
-                        modifier = Modifier.height(34.dp)
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = OpenCityColors.BrandAzure, modifier = Modifier.size(14.dp))
-                            Text("Quay lại", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = OpenCityColors.BrandAzure)
+                            Surface(
+                                color = if (isTransfer) Color(0xFFF59E0B) else Color(0xFF2563EB),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(
+                                    text = if (isTransfer) "$routeNum → $secondRouteNum" else routeNum,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                )
+                            }
+
+                            Text(
+                                text = "~$estMins phút • $stCount trạm",
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = OpenCityColors.TextMain
+                            )
                         }
+
+                        Surface(
+                            onClick = onClearTripPlan,
+                            shape = RoundedCornerShape(8.dp),
+                            color = OpenCityColors.BrandAzureLight,
+                            border = BorderStroke(1.dp, OpenCityColors.BrandAzure.copy(alpha = 0.25f)),
+                            modifier = Modifier.height(30.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 9.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = null,
+                                    tint = OpenCityColors.BrandAzure,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Text(
+                                    "Quay lại",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = OpenCityColors.BrandAzure
+                                )
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        if (totalWalkDist > 0) {
+                            Surface(
+                                color = Color(0xFF10B981).copy(alpha = 0.12f),
+                                shape = RoundedCornerShape(6.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.DirectionsRun,
+                                        contentDescription = null,
+                                        tint = Color(0xFF047857),
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Text(
+                                        text = "Đi bộ ~$walkDistFormatted ($walkTimeFormatted)",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color(0xFF047857)
+                                    )
+                                }
+                            }
+                        }
+
+                        Text(
+                            text = "🌱 Giảm ~$co2Formatted CO₂",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF166534)
+                        )
                     }
                 }
             }
 
             Column(
                 modifier = Modifier
-                    .padding(top = 74.dp, end = 14.dp)
+                    .padding(top = 96.dp, end = 14.dp)
                     .align(Alignment.TopEnd),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -3773,10 +3881,15 @@ private fun BusMapView(
                                     onClick = {
                                         selectedStopIndex = idx
                                         if (sLat != 0.0 && sLng != 0.0) {
-                                            mapLibreMap?.animateCamera(
-                                                CameraUpdateFactory.newLatLngZoom(LatLng(sLat, sLng), 16.5),
-                                                500
-                                            )
+                                            mapLibreMap?.let { map ->
+                                                map.animateCamera(
+                                                    CameraUpdateFactory.newLatLngZoom(LatLng(sLat - 0.0012, sLng), 16.5),
+                                                    500
+                                                )
+                                                if (idx in tripMarkers.indices) {
+                                                    map.selectMarker(tripMarkers[idx])
+                                                }
+                                            }
                                         }
                                     },
                                     shape = RoundedCornerShape(10.dp),
@@ -4649,73 +4762,181 @@ private fun createClusterMarkerBitmap(context: Context, count: Int): Bitmap {
     return bitmap
 }
 
-private fun createSelectedBusStopMarkerBitmap(context: Context): Bitmap {
+private fun createSelectedBusStopMarkerBitmap(context: Context, stopName: String = ""): Bitmap {
     val density = context.resources.displayMetrics.density
-    val size = (38 * density).toInt()
-    val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val cleanName = stopName.removePrefix("[Trạm] ").trim().let {
+        if (it.length > 22) it.take(21) + "…" else it
+    }
+
+    if (cleanName.isBlank()) {
+        val size = (38 * density).toInt()
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val center = size / 2f
+
+        val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = 0x332563EB
+        }
+        canvas.drawCircle(center, center, 17f * density, glowPaint)
+
+        val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = 0x38000000
+        }
+        canvas.drawCircle(center, center + 1.5f * density, 14f * density, shadowPaint)
+
+        val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = 0xFF1E40AF.toInt()
+        }
+        canvas.drawCircle(center, center, 13f * density, bgPaint)
+
+        val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 2.5f * density
+            color = android.graphics.Color.WHITE
+        }
+        canvas.drawCircle(center, center, 13f * density, strokePaint)
+
+        drawBusSilhouette(canvas, center, center, density, 0xFF1E40AF.toInt())
+        return bitmap
+    }
+
+    val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF0F172A.toInt()
+        textSize = 12f * density
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+    }
+
+    val iconText = "🚏 "
+    val iconWidth = textPaint.measureText(iconText)
+    val textWidth = textPaint.measureText(cleanName)
+    val padH = 8f * density
+    val pillW = iconWidth + textWidth + padH * 2
+    val pillH = 24f * density
+    val arrowH = 4f * density
+    val pinRadius = 13f * density
+    val glowRadius = 17f * density
+
+    val totalWidth = Math.max((pillW + 12f * density).toInt(), (glowRadius * 2 + 8f * density).toInt())
+    val totalHeight = (pillH + arrowH + glowRadius * 2 + 4f * density).toInt()
+
+    val bitmap = Bitmap.createBitmap(totalWidth, totalHeight, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
-    val center = size / 2f
+    val centerX = totalWidth / 2f
+
+    val pillL = centerX - pillW / 2f
+    val pillT = 3f * density
+    val pillR = centerX + pillW / 2f
+    val pillB = pillT + pillH
+    val pillCorner = 7f * density
+
+    val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = 0x2E000000
+    }
+    canvas.drawRoundRect(android.graphics.RectF(pillL, pillT + 1.2f * density, pillR, pillB + 1.2f * density), pillCorner, pillCorner, shadowPaint)
+
+    val pillBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        color = android.graphics.Color.WHITE
+    }
+    val pillRect = android.graphics.RectF(pillL, pillT, pillR, pillB)
+    canvas.drawRoundRect(pillRect, pillCorner, pillCorner, pillBgPaint)
+
+    val pillStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 1.8f * density
+        color = 0xFF2563EB.toInt()
+    }
+    canvas.drawRoundRect(pillRect, pillCorner, pillCorner, pillStroke)
+
+    val arrowPath = android.graphics.Path().apply {
+        moveTo(centerX - 4f * density, pillB - 0.5f * density)
+        lineTo(centerX, pillB + arrowH)
+        lineTo(centerX + 4f * density, pillB - 0.5f * density)
+        close()
+    }
+    canvas.drawPath(arrowPath, pillBgPaint)
+    val arrowStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 1.8f * density
+        color = 0xFF2563EB.toInt()
+        strokeCap = Paint.Cap.ROUND
+    }
+    canvas.drawLine(centerX - 4f * density, pillB - 0.5f * density, centerX, pillB + arrowH, arrowStroke)
+    canvas.drawLine(centerX, pillB + arrowH, centerX + 4f * density, pillB - 0.5f * density, arrowStroke)
+
+    val textY = pillT + pillH / 2f - (textPaint.descent() + textPaint.ascent()) / 2f
+    canvas.drawText(iconText + cleanName, pillL + padH, textY, textPaint)
+
+    val pinCenterY = pillB + arrowH + glowRadius
 
     val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
         color = 0x332563EB
     }
-    canvas.drawCircle(center, center, 17f * density, glowPaint)
+    canvas.drawCircle(centerX, pinCenterY, glowRadius, glowPaint)
 
-    val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    val pinShadow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
         color = 0x38000000
     }
-    canvas.drawCircle(center, center + 1.5f * density, 14f * density, shadowPaint)
+    canvas.drawCircle(centerX, pinCenterY + 1.2f * density, pinRadius + 1f * density, pinShadow)
 
-    val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    val pinBg = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
         color = 0xFF1E40AF.toInt()
     }
-    canvas.drawCircle(center, center, 13f * density, bgPaint)
+    canvas.drawCircle(centerX, pinCenterY, pinRadius, pinBg)
 
-    val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    val pinStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = 2.5f * density
+        strokeWidth = 2.2f * density
         color = android.graphics.Color.WHITE
     }
-    canvas.drawCircle(center, center, 13f * density, strokePaint)
+    canvas.drawCircle(centerX, pinCenterY, pinRadius, pinStroke)
 
+    drawBusSilhouette(canvas, centerX, pinCenterY, density, 0xFF1E40AF.toInt())
+
+    return bitmap
+}
+
+private fun drawBusSilhouette(canvas: Canvas, cx: Float, cy: Float, density: Float, windowColor: Int) {
     val busPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = android.graphics.Color.WHITE
         style = Paint.Style.FILL
     }
     val winPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFF1E40AF.toInt()
+        color = windowColor
         style = Paint.Style.FILL
     }
 
-    val bW = 14f * density
-    val bH = 16f * density
-    val bL = center - bW / 2f
-    val bT = center - bH / 2f
-    val bR = center + bW / 2f
-    val bB = center + bH / 2f - 1.5f * density
-    val corner = 2.5f * density
+    val bW = 13f * density
+    val bH = 15f * density
+    val bL = cx - bW / 2f
+    val bT = cy - bH / 2f
+    val bR = cx + bW / 2f
+    val bB = cy + bH / 2f - 1.4f * density
+    val corner = 2.2f * density
 
     val body = android.graphics.RectF(bL, bT, bR, bB)
     canvas.drawRoundRect(body, corner, corner, busPaint)
 
-    val wheelR = 1.4f * density
+    val wheelR = 1.3f * density
     canvas.drawCircle(bL + bW * 0.25f, bB + wheelR * 0.6f, wheelR, busPaint)
     canvas.drawCircle(bR - bW * 0.25f, bB + wheelR * 0.6f, wheelR, busPaint)
 
     val winW = bW * 0.74f
     val winH = bH * 0.35f
-    val winRect = android.graphics.RectF(center - winW / 2f, bT + 2f * density, center + winW / 2f, bT + 2f * density + winH)
-    canvas.drawRoundRect(winRect, 1.3f * density, 1.3f * density, winPaint)
+    val winRect = android.graphics.RectF(cx - winW / 2f, bT + 1.8f * density, cx + winW / 2f, bT + 1.8f * density + winH)
+    canvas.drawRoundRect(winRect, 1.2f * density, 1.2f * density, winPaint)
 
-    val headLightR = 0.9f * density
-    val lightY = bB - 2.5f * density
+    val headLightR = 0.8f * density
+    val lightY = bB - 2.2f * density
     canvas.drawCircle(bL + bW * 0.24f, lightY, headLightR, winPaint)
     canvas.drawCircle(bR - bW * 0.24f, lightY, headLightR, winPaint)
-
-    return bitmap
 }
 
 private fun createIntermediateStopMarkerBitmap(context: Context, number: Int): Bitmap {

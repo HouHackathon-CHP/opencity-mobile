@@ -16,6 +16,20 @@ import java.util.concurrent.TimeUnit
 
 class ApiClient(private val context: Context, private val auth: AuthManager) {
     private val http = OkHttpClient.Builder().callTimeout(25, TimeUnit.SECONDS).build()
+    private val publicCollections = setOf(
+        "/bulletins", "/hotlines", "/air-quality/summary", "/air-quality/stations",
+        "/bus/routes", "/bus/stops", "/bus/find", "/bus/audit"
+    )
+    private val publicDetails = listOf(
+        Regex("^/bulletins/[A-Za-z0-9_.:-]{1,128}$"),
+        Regex("^/air-quality/stations/[A-Za-z0-9_.:-]{1,128}$"),
+        Regex("^/bus/(routes|stops)/[A-Za-z0-9_.:-]{1,128}$")
+    )
+
+    private fun isPublicRead(path: String): Boolean {
+        val route = path.substringBefore('?')
+        return route in publicCollections || publicDetails.any { it.matches(route) }
+    }
 
     private fun resolveBaseUrl(): String {
         val base = BuildConfig.GATEWAY_URL
@@ -35,7 +49,11 @@ class ApiClient(private val context: Context, private val auth: AuthManager) {
 
     private suspend fun request(path: String, method: String = "GET", body: okhttp3.RequestBody? = null): String =
         withContext(Dispatchers.IO) {
-            val token = runCatching { auth.accessToken() }.getOrNull()
+            val token = when {
+                auth.signedIn -> runCatching { auth.accessToken() }.getOrNull()
+                method == "GET" && isPublicRead(path) -> null
+                else -> throw IllegalStateException("Vui lòng đăng nhập để sử dụng chức năng này.")
+            }
             val base = resolveBaseUrl()
             val gatewayUrl = "$base/api/opencity$path"
             val directUrl = "$base$path"

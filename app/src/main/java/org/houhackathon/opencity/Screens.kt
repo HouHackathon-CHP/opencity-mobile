@@ -271,6 +271,7 @@ private fun FeatureItem(
 fun HomeScreen(
     api: ApiClient,
     revision: Int,
+    signedIn: Boolean,
     onNavigate: (String) -> Unit,
     onDetail: (String, String) -> Unit
 ) {
@@ -280,12 +281,19 @@ fun HomeScreen(
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(revision) {
+    LaunchedEffect(revision, signedIn) {
         loading = true
-        bulletins = runCatching { api.list("/bulletins").take(3) }.getOrDefault(emptyList())
-        reports = runCatching { api.list("/reports").take(3) }.getOrDefault(emptyList())
-        airSummary = runCatching { api.item("/air-quality/summary") }.getOrElse {
-            JSONObject("""{"average_aqi":82,"classification":{"label":"Trung bình","level":"moderate"}}""")
+        try {
+            bulletins = runCatching { api.list("/bulletins").take(3) }.getOrDefault(emptyList())
+            reports = if (signedIn) runCatching { api.list("/reports").take(3) }.getOrDefault(emptyList()) else emptyList()
+            airSummary = runCatching { api.item("/air-quality/summary") }.getOrElse {
+                JSONObject("""{"average_aqi":82,"classification":{"label":"Trung bình","level":"moderate"}}""")
+            }
+            error = null
+        } catch (e: Exception) {
+            error = e.message
+        } finally {
+            loading = false
         }
         error = null
         loading = false

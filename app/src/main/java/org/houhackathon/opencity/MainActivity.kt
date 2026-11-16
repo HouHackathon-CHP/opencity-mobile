@@ -273,7 +273,9 @@ private fun OpenCityApp(
                 }
 
                 // Main Navigation Routing
-                if (!signedIn && !guestMode && page != "account") {
+                val publicPage = guestMode || page in setOf("home", "news", "hotlines", "catalog", "account", "bus-network", "air-quality") ||
+                    (page == "detail" && detailKind == "bulletin")
+                if (!signedIn && !publicPage) {
                     WelcomeScreen(
                         login = login,
                         onExplore = { guestMode = true },
@@ -284,6 +286,7 @@ private fun OpenCityApp(
                         "home" -> HomeScreen(
                             api = api,
                             revision = revision,
+                            signedIn = signedIn,
                             onNavigate = { page = it },
                             onDetail = { kind, id ->
                                 detailKind = kind
