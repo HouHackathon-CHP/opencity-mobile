@@ -408,18 +408,38 @@ fun HomeScreen(
 
                     Spacer(Modifier.height(16.dp))
 
-                    Button(
-                        onClick = { onNavigate("new-report") },
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = OpenCityColors.BrandAzure),
-                        shape = RoundedCornerShape(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        Button(
+                            onClick = { onNavigate("new-report") },
+                            modifier = Modifier.weight(1.3f),
+                            colors = ButtonDefaults.buttonColors(containerColor = OpenCityColors.BrandAzure),
+                            shape = RoundedCornerShape(12.dp)
                         ) {
-                            Icon(imageVector = Icons.Default.AddLocationAlt, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Text(text = "+ Gửi phản ánh hiện trường mới", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(imageVector = Icons.Default.AddLocationAlt, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Text(text = "+ Gửi phản ánh", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            }
+                        }
+                        OutlinedButton(
+                            onClick = { onNavigate("dashboard") },
+                            modifier = Modifier.weight(1.1f),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.7f)),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(imageVector = Icons.Default.Speed, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
+                                Text(text = "Thống kê", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            }
                         }
                     }
                 }
@@ -1581,7 +1601,8 @@ fun AccountScreen(
     onLogout: () -> Unit,
     onSurveys: () -> Unit,
     onCatalog: () -> Unit,
-    onBusinessFeedback: () -> Unit = {}
+    onBusinessFeedback: () -> Unit = {},
+    onDashboard: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -1711,6 +1732,14 @@ fun AccountScreen(
                     title = "Doanh nghiệp kiến nghị",
                     subtitle = "Nộp hồ sơ tháo gỡ khó khăn (thuế, mặt bằng...) và theo dõi tiến trình",
                     onClick = onBusinessFeedback
+                )
+                HorizontalDivider(color = OpenCityColors.BorderColor)
+                MenuItem(
+                    icon = Icons.Default.Speed,
+                    iconColor = OpenCityColors.BrandCyan,
+                    title = "Dashboard Thống kê Đô thị",
+                    subtitle = "Biểu đồ tiến độ xử lý phản ánh theo quận/huyện, thời gian TB & hài lòng",
+                    onClick = onDashboard
                 )
                 HorizontalDivider(color = OpenCityColors.BorderColor)
                 MenuItem(
@@ -2167,7 +2196,7 @@ fun CatalogScreen(
         val canNavigate = isAvailable && route in setOf(
             "reports", "news", "map", "surveys", "appointments",
             "administrative-feedback", "air-quality", "find-bus", "bus-routes", "hotlines",
-            "communications", "community-groups", "social-feedback", "digital-wards", "business-feedback"
+            "communications", "community-groups", "social-feedback", "digital-wards", "business-feedback", "dashboard"
         )
         val requiresAuth = route in setOf("reports", "appointments", "administrative-feedback", "new-report")
 

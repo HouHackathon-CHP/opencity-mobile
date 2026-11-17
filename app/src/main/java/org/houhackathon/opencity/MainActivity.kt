@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -19,6 +20,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -283,7 +285,7 @@ private fun OpenCityApp(
                 // Main Navigation Routing
                 val publicPage = guestMode || page in setOf(
                     "home", "news", "hotlines", "catalog", "account", "bus-network", "air-quality",
-                    "digital-wards", "communications", "community-groups", "surveys", "business-feedback"
+                    "digital-wards", "communications", "community-groups", "surveys", "business-feedback", "dashboard"
                 ) || (page == "detail" && detailKind in setOf("bulletin", "communication", "survey"))
                 if (!signedIn && !publicPage) {
                     WelcomeScreen(
@@ -316,13 +318,30 @@ private fun OpenCityApp(
                                 page = "detail"
                             },
                             action = {
-                                Button(
-                                    onClick = { page = "new-report" },
-                                    colors = ButtonDefaults.buttonColors(containerColor = OpenCityColors.BrandAzure),
-                                    shape = RoundedCornerShape(14.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text("+ Gửi phản ánh hiện trường mới", fontWeight = FontWeight.Bold)
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Button(
+                                        onClick = { page = "new-report" },
+                                        colors = ButtonDefaults.buttonColors(containerColor = OpenCityColors.BrandAzure),
+                                        shape = RoundedCornerShape(14.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("+ Gửi phản ánh hiện trường mới", fontWeight = FontWeight.Bold)
+                                    }
+                                    OutlinedButton(
+                                        onClick = { page = "dashboard" },
+                                        shape = RoundedCornerShape(14.dp),
+                                        modifier = Modifier.fillMaxWidth(),
+                                        border = BorderStroke(1.dp, OpenCityColors.BrandAzureBorder),
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = OpenCityColors.BrandAzure)
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Icon(Icons.Default.Speed, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Text("Xem biểu đồ tiến độ & thống kê đô thị", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                        }
+                                    }
                                 }
                             }
                         )
@@ -357,6 +376,18 @@ private fun OpenCityApp(
                             onLogin = login,
                             onBack = { page = "home" }
                         )
+                        "dashboard" -> MunicipalDashboardScreen(
+                            api = api,
+                            revision = revision,
+                            signedIn = signedIn,
+                            onDetailReport = { id ->
+                                detailKind = "report"
+                                detailId = id
+                                page = "detail"
+                            },
+                            onNewReport = { page = "new-report" },
+                            onBack = { page = "home" }
+                        )
                         "air-quality" -> AirQualityScreen(api = api, revision = revision)
                         "find-bus" -> BusNetworkScreen(api = api, revision = revision, initialTab = "plan")
                         "bus-routes" -> BusNetworkScreen(api = api, revision = revision, initialTab = "routes")
@@ -386,7 +417,8 @@ private fun OpenCityApp(
                             },
                             onSurveys = { page = "surveys" },
                             onCatalog = { page = "catalog" },
-                            onBusinessFeedback = { page = "business-feedback" }
+                            onBusinessFeedback = { page = "business-feedback" },
+                            onDashboard = { page = "dashboard" }
                         )
                         "catalog" -> CatalogScreen(
                             signedIn = signedIn,
@@ -446,6 +478,7 @@ private fun pageTitle(page: String, detailKind: String = ""): String = when (pag
     "appointments" -> "Tiếp công dân"
     "administrative-feedback" -> "Phản ánh thủ tục hành chính"
     "business-feedback" -> "Doanh nghiệp kiến nghị"
+    "dashboard" -> "Dashboard Thống kê Đô thị"
     "air-quality" -> "Chất lượng không khí VN-AQI"
     "find-bus" -> "Mạng lưới xe buýt"
     "bus-routes" -> "Mạng lưới xe buýt"
