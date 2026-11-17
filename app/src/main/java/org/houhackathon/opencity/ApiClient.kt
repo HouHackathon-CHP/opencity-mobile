@@ -68,7 +68,7 @@ class ApiClient(private val context: Context, private val auth: AuthManager) {
                     reqBuilder.header("Authorization", "Bearer $token")
                 }
                 reqBuilder.header("X-Internal-Secret", "dxos_internal_gateway_secret_2026")
-                reqBuilder.header("X-DXOS-User", "public-citizen")
+                reqBuilder.header("X-DXOS-User", auth.userName?.takeIf { it.isNotBlank() } ?: "public-citizen")
                 reqBuilder.header("X-DXOS-Tenant", "demo")
                 reqBuilder.header("X-DXOS-Roles", "citizen")
                 return http.newCall(reqBuilder.build()).execute()
@@ -120,6 +120,30 @@ class ApiClient(private val context: Context, private val auth: AuthManager) {
     suspend fun saveConsultationOpinion(id: String, body: String): JSONObject = JSONObject(
         request("/social-feedback/topics/$id/opinion", "PUT",
             JSONObject().put("body", body.trim()).toString().toRequestBody("application/json".toMediaType())))
+    suspend fun createBusinessPetition(
+        companyName: String,
+        taxCode: String,
+        representative: String,
+        sector: String,
+        title: String,
+        description: String,
+        requestedResolution: String
+    ): JSONObject = itemPost("/business-feedback", JSONObject().apply {
+        put("company_name", companyName.trim())
+        put("tax_code", taxCode.trim())
+        put("representative", representative.trim())
+        put("sector", sector.trim())
+        put("title", title.trim())
+        put("description", description.trim())
+        put("requested_resolution", requestedResolution.trim())
+    })
+
+    suspend fun provideBusinessPetitionInfo(id: String, note: String): JSONObject =
+        itemPost("/business-feedback/$id/provide-info", JSONObject().put("note", note.trim()))
+
+    suspend fun reopenBusinessPetition(id: String, note: String): JSONObject =
+        itemPost("/business-feedback/$id/reopen", JSONObject().put("note", note.trim()))
+
     private suspend fun itemPost(path: String, value: JSONObject): JSONObject = JSONObject(request(path, "POST",
         value.toString().toRequestBody("application/json".toMediaType())))
 

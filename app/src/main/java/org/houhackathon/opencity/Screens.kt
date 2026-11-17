@@ -1580,7 +1580,8 @@ fun AccountScreen(
     register: () -> Unit = {},
     onLogout: () -> Unit,
     onSurveys: () -> Unit,
-    onCatalog: () -> Unit
+    onCatalog: () -> Unit,
+    onBusinessFeedback: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -1702,6 +1703,14 @@ fun AccountScreen(
                     title = "Khảo sát ý kiến cư dân",
                     subtitle = "Xem và tham gia các cuộc khảo sát công khai",
                     onClick = onSurveys
+                )
+                HorizontalDivider(color = OpenCityColors.BorderColor)
+                MenuItem(
+                    icon = Icons.Default.BusinessCenter,
+                    iconColor = OpenCityColors.BrandAzure,
+                    title = "Doanh nghiệp kiến nghị",
+                    subtitle = "Nộp hồ sơ tháo gỡ khó khăn (thuế, mặt bằng...) và theo dõi tiến trình",
+                    onClick = onBusinessFeedback
                 )
                 HorizontalDivider(color = OpenCityColors.BorderColor)
                 MenuItem(
@@ -2158,7 +2167,7 @@ fun CatalogScreen(
         val canNavigate = isAvailable && route in setOf(
             "reports", "news", "map", "surveys", "appointments",
             "administrative-feedback", "air-quality", "find-bus", "bus-routes", "hotlines",
-            "communications", "community-groups", "social-feedback", "digital-wards"
+            "communications", "community-groups", "social-feedback", "digital-wards", "business-feedback"
         )
         val requiresAuth = route in setOf("reports", "appointments", "administrative-feedback", "new-report")
 

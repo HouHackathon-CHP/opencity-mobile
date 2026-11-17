@@ -283,7 +283,7 @@ private fun OpenCityApp(
                 // Main Navigation Routing
                 val publicPage = guestMode || page in setOf(
                     "home", "news", "hotlines", "catalog", "account", "bus-network", "air-quality",
-                    "digital-wards", "communications", "community-groups", "surveys"
+                    "digital-wards", "communications", "community-groups", "surveys", "business-feedback"
                 ) || (page == "detail" && detailKind in setOf("bulletin", "communication", "survey"))
                 if (!signedIn && !publicPage) {
                     WelcomeScreen(
@@ -350,6 +350,13 @@ private fun OpenCityApp(
                         )
                         "appointments" -> AppointmentsScreen(api = api, revision = revision)
                         "administrative-feedback" -> AdministrativeFeedbackScreen(api = api, revision = revision)
+                        "business-feedback" -> BusinessFeedbackScreen(
+                            api = api,
+                            revision = revision,
+                            signedIn = signedIn,
+                            onLogin = login,
+                            onBack = { page = "home" }
+                        )
                         "air-quality" -> AirQualityScreen(api = api, revision = revision)
                         "find-bus" -> BusNetworkScreen(api = api, revision = revision, initialTab = "plan")
                         "bus-routes" -> BusNetworkScreen(api = api, revision = revision, initialTab = "routes")
@@ -378,7 +385,8 @@ private fun OpenCityApp(
                                 page = "home"
                             },
                             onSurveys = { page = "surveys" },
-                            onCatalog = { page = "catalog" }
+                            onCatalog = { page = "catalog" },
+                            onBusinessFeedback = { page = "business-feedback" }
                         )
                         "catalog" -> CatalogScreen(
                             signedIn = signedIn,
@@ -437,6 +445,7 @@ private fun pageTitle(page: String, detailKind: String = ""): String = when (pag
     "surveys" -> "Khảo sát ý kiến"
     "appointments" -> "Tiếp công dân"
     "administrative-feedback" -> "Phản ánh thủ tục hành chính"
+    "business-feedback" -> "Doanh nghiệp kiến nghị"
     "air-quality" -> "Chất lượng không khí VN-AQI"
     "find-bus" -> "Mạng lưới xe buýt"
     "bus-routes" -> "Mạng lưới xe buýt"
