@@ -366,7 +366,8 @@ private fun OpenCityApp(
                                 detailKind = kind
                                 detailId = id
                                 page = "detail"
-                            }
+                            },
+                            onNavigate = { page = it }
                         )
                         "account" -> AccountScreen(
                             signedIn = signedIn,
