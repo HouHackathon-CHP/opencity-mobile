@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -19,6 +20,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -38,6 +40,9 @@ class MainActivity : ComponentActivity() {
     private val signIn = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         auth.completeSignIn(result.data) { authMessage = it }
     }
+    private val registerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        auth.completeSignIn(result.data) { authMessage = it }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -48,6 +53,10 @@ class MainActivity : ComponentActivity() {
                 login = {
                     authMessage = null
                     signIn.launch(auth.signInIntent())
+                },
+                register = {
+                    authMessage = null
+                    registerLauncher.launch(auth.registerIntent())
                 },
                 authMessage = authMessage,
                 clearAuthMessage = { authMessage = null }
@@ -67,6 +76,7 @@ private fun OpenCityApp(
     auth: AuthManager,
     api: ApiClient,
     login: () -> Unit,
+    register: () -> Unit,
     authMessage: String?,
     clearAuthMessage: () -> Unit
 ) {
@@ -76,6 +86,7 @@ private fun OpenCityApp(
     var revision by remember { mutableIntStateOf(0) }
     var notificationReturnPage by remember { mutableStateOf("home") }
     var unreadNotifications by remember { mutableIntStateOf(0) }
+    var guestMode by remember { mutableStateOf(false) }
     val signedIn = auth.signedIn
     val rootPages = setOf("home", "reports", "news", "map", "account")
 
@@ -105,7 +116,12 @@ private fun OpenCityApp(
                         modifier = Modifier
                             .fillMaxWidth()
                             .statusBarsPadding()
-                            .padding(horizontal = 18.dp, vertical = 12.dp),
+                            .padding(
+                                start = if (page in rootPages) 18.dp else 6.dp,
+                                end = 18.dp,
+                                top = 8.dp,
+                                bottom = 8.dp
+                            ),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
@@ -164,6 +180,9 @@ private fun OpenCityApp(
                                             "surveys" -> "home"
                                             "appointments" -> "home"
                                             "administrative-feedback" -> "home"
+                                            "air-quality" -> "home"
+                                            "find-bus" -> "home"
+                                            "bus-routes" -> "home"
                                             "hotlines" -> "home"
                                             "communications" -> "home"
                                             "community-groups" -> "home"
@@ -264,10 +283,17 @@ private fun OpenCityApp(
                 }
 
                 // Main Navigation Routing
-                val publicPage = page in setOf("home", "news", "hotlines", "catalog", "account") ||
-                    (page == "detail" && detailKind == "bulletin")
+                val publicPage = guestMode || page in setOf(
+                    "home", "news", "hotlines", "catalog", "account", "bus-network", "air-quality",
+                    "digital-wards", "communications", "community-groups", "surveys", "business-feedback", "dashboard"
+                ) || (page == "detail" && detailKind in setOf("bulletin", "communication", "survey"))
                 if (!signedIn && !publicPage) {
-                    WelcomeScreen(login = login, modifier = Modifier.fillMaxSize())
+                    WelcomeScreen(
+                        login = login,
+                        register = register,
+                        onExplore = { guestMode = true },
+                        modifier = Modifier.fillMaxSize()
+                    )
                 } else {
                     when (page) {
                         "home" -> HomeScreen(
@@ -292,13 +318,30 @@ private fun OpenCityApp(
                                 page = "detail"
                             },
                             action = {
-                                Button(
-                                    onClick = { page = "new-report" },
-                                    colors = ButtonDefaults.buttonColors(containerColor = OpenCityColors.BrandAzure),
-                                    shape = RoundedCornerShape(14.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text("+ Gửi phản ánh hiện trường mới", fontWeight = FontWeight.Bold)
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Button(
+                                        onClick = { page = "new-report" },
+                                        colors = ButtonDefaults.buttonColors(containerColor = OpenCityColors.BrandAzure),
+                                        shape = RoundedCornerShape(14.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("+ Gửi phản ánh hiện trường mới", fontWeight = FontWeight.Bold)
+                                    }
+                                    OutlinedButton(
+                                        onClick = { page = "dashboard" },
+                                        shape = RoundedCornerShape(14.dp),
+                                        modifier = Modifier.fillMaxWidth(),
+                                        border = BorderStroke(1.dp, OpenCityColors.BrandAzureBorder),
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = OpenCityColors.BrandAzure)
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Icon(Icons.Default.Speed, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Text("Xem biểu đồ tiến độ & thống kê đô thị", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                        }
+                                    }
                                 }
                             }
                         )
@@ -326,6 +369,28 @@ private fun OpenCityApp(
                         )
                         "appointments" -> AppointmentsScreen(api = api, revision = revision)
                         "administrative-feedback" -> AdministrativeFeedbackScreen(api = api, revision = revision)
+                        "business-feedback" -> BusinessFeedbackScreen(
+                            api = api,
+                            revision = revision,
+                            signedIn = signedIn,
+                            onLogin = login,
+                            onBack = { page = "home" }
+                        )
+                        "dashboard" -> MunicipalDashboardScreen(
+                            api = api,
+                            revision = revision,
+                            signedIn = signedIn,
+                            onDetailReport = { id ->
+                                detailKind = "report"
+                                detailId = id
+                                page = "detail"
+                            },
+                            onNewReport = { page = "new-report" },
+                            onBack = { page = "home" }
+                        )
+                        "air-quality" -> AirQualityScreen(api = api, revision = revision)
+                        "find-bus" -> BusNetworkScreen(api = api, revision = revision, initialTab = "plan")
+                        "bus-routes" -> BusNetworkScreen(api = api, revision = revision, initialTab = "routes")
                         "hotlines" -> HotlinesScreen(api = api, revision = revision)
                         "communications" -> ListScreen(api = api, path = "/communications", title = "Thông tin truyền thông", revision = revision,
                             onClick = { detailKind = "communication"; detailId = it; page = "detail" })
@@ -343,17 +408,24 @@ private fun OpenCityApp(
                         )
                         "account" -> AccountScreen(
                             signedIn = signedIn,
+                            userName = auth.userName,
                             login = login,
+                            register = register,
                             onLogout = {
                                 auth.signOut()
                                 page = "home"
                             },
                             onSurveys = { page = "surveys" },
-                            onCatalog = { page = "catalog" }
+                            onCatalog = { page = "catalog" },
+                            onBusinessFeedback = { page = "business-feedback" },
+                            onDashboard = { page = "dashboard" }
                         )
                         "catalog" -> CatalogScreen(
+                            signedIn = signedIn,
                             onBack = { page = "home" },
-                            onNavigate = { page = it }
+                            onNavigate = { page = it },
+                            onLogin = login,
+                            onRegister = register
                         )
                         "notifications" -> NotificationsScreen(
                             api = api,
@@ -405,6 +477,11 @@ private fun pageTitle(page: String, detailKind: String = ""): String = when (pag
     "surveys" -> "Khảo sát ý kiến"
     "appointments" -> "Tiếp công dân"
     "administrative-feedback" -> "Phản ánh thủ tục hành chính"
+    "business-feedback" -> "Doanh nghiệp kiến nghị"
+    "dashboard" -> "Dashboard Thống kê Đô thị"
+    "air-quality" -> "Chất lượng không khí VN-AQI"
+    "find-bus" -> "Mạng lưới xe buýt"
+    "bus-routes" -> "Mạng lưới xe buýt"
     "hotlines" -> "Đường dây nóng"
     "communications" -> "Thông tin truyền thông"
     "community-groups" -> "Nhóm cộng đồng"

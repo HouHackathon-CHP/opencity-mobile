@@ -5,7 +5,6 @@
 ## Chức năng
 
 - Đăng nhập OAuth 2.0 Authorization Code + PKCE bằng AppAuth; phiên được mã hóa với Android Keystore, làm mới token khi cần.
-- Khách chưa đăng nhập có thể xem trang chủ, danh mục, tin/cảnh báo và đường dây nóng; gửi phản ánh, đặt lịch và xem hồ sơ cá nhân vẫn yêu cầu đăng nhập.
 - Tạo phản ánh có ảnh/vị trí tùy chọn, lưu bản nháp trên máy, xem danh sách, chi tiết và tiến trình.
 - Xem thông báo tiến độ phản ánh trong app, đánh dấu đã đọc và mở thẳng hồ sơ liên quan.
 - Đọc tin/cảnh báo và trả lời khảo sát một lần.

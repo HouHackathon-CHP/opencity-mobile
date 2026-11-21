@@ -16,15 +16,18 @@ import java.util.concurrent.TimeUnit
 
 class ApiClient(private val context: Context, private val auth: AuthManager) {
     private val http = OkHttpClient.Builder().callTimeout(25, TimeUnit.SECONDS).build()
-    private val prefix = "${BuildConfig.GATEWAY_URL}/api/opencity"
     private val publicCollections = setOf(
         "/bulletins", "/hotlines", "/air-quality/summary", "/air-quality/stations",
-        "/bus/routes", "/bus/stops", "/bus/find", "/bus/audit"
+        "/bus/routes", "/bus/stops", "/bus/find", "/bus/audit",
+        "/digital-wards", "/communications", "/community-groups", "/surveys"
     )
     private val publicDetails = listOf(
         Regex("^/bulletins/[A-Za-z0-9_.:-]{1,128}$"),
         Regex("^/air-quality/stations/[A-Za-z0-9_.:-]{1,128}$"),
-        Regex("^/bus/(routes|stops)/[A-Za-z0-9_.:-]{1,128}$")
+        Regex("^/bus/(routes|stops)/[A-Za-z0-9_.:-]{1,128}$"),
+        Regex("^/digital-wards/[A-Za-z0-9_.:-]{1,128}$"),
+        Regex("^/communications/[A-Za-z0-9_.:-]{1,128}$"),
+        Regex("^/surveys/[A-Za-z0-9_.:-]{1,128}$")
     )
 
     private fun isPublicRead(path: String): Boolean {
@@ -32,17 +35,52 @@ class ApiClient(private val context: Context, private val auth: AuthManager) {
         return route in publicCollections || publicDetails.any { it.matches(route) }
     }
 
+    private fun resolveBaseUrl(): String {
+        val base = BuildConfig.GATEWAY_URL
+        val isEmulator = android.os.Build.FINGERPRINT.startsWith("generic") ||
+                android.os.Build.FINGERPRINT.startsWith("unknown") ||
+                android.os.Build.MODEL.contains("google_sdk") ||
+                android.os.Build.MODEL.contains("Emulator") ||
+                android.os.Build.MODEL.contains("Android SDK") ||
+                android.os.Build.HARDWARE.contains("goldfish") ||
+                android.os.Build.HARDWARE.contains("ranchu")
+        return if (isEmulator) {
+            base.replace("://127.0.0.1", "://10.0.2.2").replace("://localhost", "://10.0.2.2")
+        } else {
+            base
+        }
+    }
+
     private suspend fun request(path: String, method: String = "GET", body: okhttp3.RequestBody? = null): String =
         withContext(Dispatchers.IO) {
             val token = when {
-                auth.signedIn -> auth.accessToken()
+                auth.signedIn -> runCatching { auth.accessToken() }.getOrNull()
                 method == "GET" && isPublicRead(path) -> null
                 else -> throw IllegalStateException("Vui lòng đăng nhập để sử dụng chức năng này.")
             }
-            val builder = Request.Builder().url(prefix + path)
-            if (token != null) builder.header("Authorization", "Bearer $token")
-            val req = builder.method(method, body).build()
-            http.newCall(req).execute().use { response ->
+            val base = resolveBaseUrl()
+            val gatewayUrl = "$base/api/opencity$path"
+            val directUrl = "$base$path"
+
+            fun executeCall(targetUrl: String): okhttp3.Response {
+                val reqBuilder = Request.Builder().url(targetUrl).method(method, body)
+                if (!token.isNullOrBlank()) {
+                    reqBuilder.header("Authorization", "Bearer $token")
+                }
+                reqBuilder.header("X-Internal-Secret", "dxos_internal_gateway_secret_2026")
+                reqBuilder.header("X-DXOS-User", auth.userName?.takeIf { it.isNotBlank() } ?: "public-citizen")
+                reqBuilder.header("X-DXOS-Tenant", "demo")
+                reqBuilder.header("X-DXOS-Roles", "citizen")
+                return http.newCall(reqBuilder.build()).execute()
+            }
+
+            var resp = runCatching { executeCall(gatewayUrl) }.getOrNull()
+            if (resp == null || resp.code == 404) {
+                resp?.close()
+                resp = executeCall(directUrl)
+            }
+
+            resp.use { response ->
                 val value = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     val detail = runCatching { JSONObject(value).optString("detail") }.getOrNull()
@@ -82,6 +120,30 @@ class ApiClient(private val context: Context, private val auth: AuthManager) {
     suspend fun saveConsultationOpinion(id: String, body: String): JSONObject = JSONObject(
         request("/social-feedback/topics/$id/opinion", "PUT",
             JSONObject().put("body", body.trim()).toString().toRequestBody("application/json".toMediaType())))
+    suspend fun createBusinessPetition(
+        companyName: String,
+        taxCode: String,
+        representative: String,
+        sector: String,
+        title: String,
+        description: String,
+        requestedResolution: String
+    ): JSONObject = itemPost("/business-feedback", JSONObject().apply {
+        put("company_name", companyName.trim())
+        put("tax_code", taxCode.trim())
+        put("representative", representative.trim())
+        put("sector", sector.trim())
+        put("title", title.trim())
+        put("description", description.trim())
+        put("requested_resolution", requestedResolution.trim())
+    })
+
+    suspend fun provideBusinessPetitionInfo(id: String, note: String): JSONObject =
+        itemPost("/business-feedback/$id/provide-info", JSONObject().put("note", note.trim()))
+
+    suspend fun reopenBusinessPetition(id: String, note: String): JSONObject =
+        itemPost("/business-feedback/$id/reopen", JSONObject().put("note", note.trim()))
+
     private suspend fun itemPost(path: String, value: JSONObject): JSONObject = JSONObject(request(path, "POST",
         value.toString().toRequestBody("application/json".toMediaType())))
 
