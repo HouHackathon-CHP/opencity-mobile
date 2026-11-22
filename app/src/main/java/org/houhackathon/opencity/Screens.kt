@@ -17,7 +17,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Article
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.automirrored.outlined.Article
+import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -39,9 +44,7 @@ import org.json.JSONObject
 internal fun JSONObject.text(key: String): String = optString(key).takeUnless { it == "null" }.orEmpty()
 internal fun JSONObject.number(key: String): Double? = if (isNull(key)) null else optDouble(key).takeIf { !it.isNaN() }
 
-// ==========================================
-// 1. WELCOME SCREEN (When citizen is not logged in)
-// ==========================================
+// 1. WELCOME SCREEN
 @Composable
 fun WelcomeScreen(
     login: () -> Unit,
@@ -301,9 +304,8 @@ private fun FeatureItem(
     }
 }
 
-// ==========================================
-// 2. HOME SCREEN (Citizen Hub)
-// ==========================================
+
+// 2. HOME SCREEN
 @Composable
 fun HomeScreen(
     api: ApiClient,
@@ -672,9 +674,7 @@ private fun ShortcutTile(
     }
 }
 
-// ==========================================
-// 3. LIST SCREEN (Reports, Bulletins, Surveys)
-// ==========================================
+// 3. LIST SCREEN
 @Composable
 fun ListScreen(
     api: ApiClient,
@@ -682,6 +682,7 @@ fun ListScreen(
     title: String,
     revision: Int,
     onClick: (String) -> Unit,
+    onLogin: (() -> Unit)? = null,
     action: (@Composable () -> Unit)? = null
 ) {
     var rawItems by remember(path) { mutableStateOf<List<JSONObject>>(emptyList()) }
@@ -698,6 +699,11 @@ fun ListScreen(
     }
 
     LaunchedEffect(path, revision, reload) {
+        if (!api.auth.signedIn && !api.isPublicRead(path)) {
+            loading = false
+            error = "Yêu cầu đăng nhập tài khoản công dân DX-OS để sử dụng tính năng này."
+            return@LaunchedEffect
+        }
         loading = true
         try {
             rawItems = api.list(path)
@@ -748,6 +754,11 @@ fun ListScreen(
         }
     }
 
+    val isAuthError = (!api.auth.signedIn && !api.isPublicRead(path)) ||
+            error?.contains("đăng nhập", ignoreCase = true) == true ||
+            error?.contains("token", ignoreCase = true) == true ||
+            error?.contains("xác thực", ignoreCase = true) == true
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -769,9 +780,9 @@ fun ListScreen(
                     color = OpenCityColors.TextMain
                 )
                 Text(
-                    text = "${filteredItems.size} mục hiển thị",
+                    text = if (isAuthError) "Yêu cầu xác thực tài khoản" else "${filteredItems.size} mục hiển thị",
                     fontSize = 12.sp,
-                    color = OpenCityColors.TextMuted
+                    color = if (isAuthError) OpenCityColors.BrandAzure else OpenCityColors.TextMuted
                 )
             }
 
@@ -828,17 +839,35 @@ fun ListScreen(
 
         Spacer(Modifier.height(14.dp))
 
-        error?.let { ErrorBanner(it) }
-
-        if (loading) {
-            Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = OpenCityColors.BrandAzure)
+        if (isAuthError) {
+            val gateTitle = when (kind) {
+                "survey" -> "Đăng nhập để tham gia khảo sát ý kiến"
+                "report" -> "Đăng nhập để theo dõi hồ sơ phản ánh"
+                else -> "Yêu cầu đăng nhập tài khoản Công dân"
             }
-        } else if (filteredItems.isEmpty()) {
-            EmptyPlaceholder("Không tìm thấy dữ liệu phù hợp với bộ lọc hiện tại.")
+            val gateDesc = when (kind) {
+                "survey" -> "Mỗi tài khoản công dân tham gia biểu quyết một lần cho từng chủ trương. Dữ liệu tổng hợp được phân tách theo phạm vi quản lý của đơn vị bạn."
+                "report" -> "Hồ sơ phản ánh hiện trường được liên kết với định danh tài khoản công dân DX-OS để bảo mật thông tin và theo dõi tiến độ xử lý từ cán bộ đô thị."
+                else -> "Tính năng này yêu cầu định danh tài khoản công dân DX-OS để xem thông tin và tham gia tương tác."
+            }
+            LoginGateCard(
+                title = gateTitle,
+                description = gateDesc,
+                onLogin = onLogin
+            )
         } else {
-            filteredItems.forEach { item ->
-                ItemCard(item = item, kind = kind) { onClick(item.text("id")) }
+            error?.let { ErrorBanner(it) }
+
+            if (loading) {
+                Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = OpenCityColors.BrandAzure)
+                }
+            } else if (filteredItems.isEmpty()) {
+                EmptyPlaceholder("Không tìm thấy dữ liệu phù hợp với bộ lọc hiện tại.")
+            } else {
+                filteredItems.forEach { item ->
+                    ItemCard(item = item, kind = kind) { onClick(item.text("id")) }
+                }
             }
         }
 
@@ -846,9 +875,6 @@ fun ListScreen(
     }
 }
 
-// ==========================================
-// ITEM CARD (Modern Card Component)
-// ==========================================
 @Composable
 private fun ItemCard(item: JSONObject, kind: String, onClick: () -> Unit) {
     Surface(
@@ -1016,9 +1042,7 @@ private fun StatusPill(item: JSONObject, kind: String) {
     }
 }
 
-// ==========================================
-// 4. DETAIL SCREEN (Master Detail)
-// ==========================================
+// 4. màn hình thông tin chi tiết
 @Composable
 fun DetailScreen(
     api: ApiClient,
@@ -1026,7 +1050,8 @@ fun DetailScreen(
     id: String,
     revision: Int,
     onBack: () -> Unit,
-    onChanged: () -> Unit
+    onChanged: () -> Unit,
+    onLogin: (() -> Unit)? = null
 ) {
     val path = when (kind) {
         "report" -> "/reports/$id"
@@ -1043,6 +1068,10 @@ fun DetailScreen(
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(path, revision, localRevision) {
+        if (!api.auth.signedIn && !api.isPublicRead(path)) {
+            error = "Yêu cầu đăng nhập tài khoản công dân DX-OS để xem chi tiết."
+            return@LaunchedEffect
+        }
         try {
             item = api.item(path)
             error = null
@@ -1067,7 +1096,7 @@ fun DetailScreen(
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Icon(
-                imageVector = Icons.Default.ArrowBack,
+                imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
                 contentDescription = "Quay lại",
                 tint = OpenCityColors.BrandAzure,
                 modifier = Modifier.size(16.dp)
@@ -1081,6 +1110,21 @@ fun DetailScreen(
         }
 
         Spacer(Modifier.height(12.dp))
+
+        val isAuthError = (!api.auth.signedIn && !api.isPublicRead(path)) ||
+                error?.contains("đăng nhập", ignoreCase = true) == true ||
+                error?.contains("token", ignoreCase = true) == true ||
+                error?.contains("xác thực", ignoreCase = true) == true
+
+        if (isAuthError) {
+            LoginGateCard(
+                title = "Đăng nhập để xem nội dung chi tiết",
+                description = "Nội dung này yêu cầu định danh tài khoản công dân DX-OS để bảo mật thông tin và kiểm tra quyền hạn truy cập.",
+                onLogin = onLogin,
+                onBack = onBack
+            )
+            return@Column
+        }
 
         error?.let {
             ErrorBanner(it)
@@ -1210,7 +1254,7 @@ fun DetailScreen(
                     }
                 }
 
-                // Timeline Audit Trail (Tiến trình xử lý)
+                // Tiến trình xử lý
                 val history = data.optJSONArray("history")
                 Spacer(Modifier.height(16.dp))
                 Surface(
@@ -1583,9 +1627,7 @@ private fun TimelineNode(action: String, timestamp: String, note: String?, isLas
     }
 }
 
-// ==========================================
-// 5. ACCOUNT SCREEN (Citizen Identity Card)
-// ==========================================
+// 5. ACCOUNT SCREEN
 @Composable
 fun AccountScreen(
     signedIn: Boolean,
@@ -1616,7 +1658,7 @@ fun AccountScreen(
 
         Spacer(Modifier.height(14.dp))
 
-        // Digital Citizen / Operator ID Card Mockup
+        // Digital Citizen
         Surface(
             shape = RoundedCornerShape(20.dp),
             shadowElevation = 6.dp,
@@ -1910,9 +1952,180 @@ private fun MenuItem(
     }
 }
 
-// ==========================================
-// 6. CATALOG SCREEN (Public Services Catalog)
-// ==========================================
+// 6. CATALOG SCREEN
+@Composable
+private fun getServiceIconOutlined(iconName: String, categoryId: String): ImageVector {
+    return when (iconName) {
+        "MapPin", "MapPinned" -> Icons.Outlined.Place
+        "AddLocationAlt" -> Icons.Outlined.AddLocationAlt
+        "Layers" -> Icons.Outlined.Layers
+        "Bell" -> Icons.Outlined.Notifications
+        "Newspaper" -> Icons.AutoMirrored.Outlined.Article
+        "Megaphone" -> Icons.Outlined.Campaign
+        "TriangleAlert", "FileWarning", "ShieldAlert" -> Icons.Outlined.WarningAmber
+        "BusFront", "Route" -> Icons.Outlined.DirectionsBus
+        "CalendarDays", "CalendarCheck" -> Icons.Outlined.CalendarToday
+        "Headset" -> Icons.Outlined.SupportAgent
+        "BriefcaseBusiness" -> Icons.Outlined.WorkOutline
+        "Landmark" -> Icons.Outlined.AccountBalance
+        "Building2", "House" -> Icons.Outlined.LocationCity
+        "UsersRound", "MessageCircle", "MessagesSquare" -> Icons.Outlined.Groups
+        "ShieldCheck" -> Icons.Outlined.Shield
+        "Camera" -> Icons.Outlined.PhotoCamera
+        "Ticket" -> Icons.Outlined.ConfirmationNumber
+        "Plane" -> Icons.Outlined.Flight
+        "ParkingCircle" -> Icons.Outlined.LocalParking
+        "TrafficCone" -> Icons.Outlined.Traffic
+        "ClipboardPlus", "ClipboardCheck" -> Icons.Outlined.Assignment
+        "HeartPulse", "Hospital", "Globe" -> Icons.Outlined.LocalHospital
+        "HeartHandshake" -> Icons.Outlined.FavoriteBorder
+        "Pill" -> Icons.Outlined.Medication
+        "School", "GraduationCap" -> Icons.Outlined.School
+        "BadgeCheck", "BadgeInfo" -> Icons.Outlined.Verified
+        "BookOpen", "BookOpenCheck" -> Icons.Outlined.MenuBook
+        "Map", "Compass" -> Icons.Outlined.Explore
+        "Castle", "Heritage" -> Icons.Outlined.AccountBalance
+        "Store", "ShoppingBag" -> Icons.Outlined.Storefront
+        "ScanQrCode" -> Icons.Outlined.QrCode
+        "Flame" -> Icons.Outlined.LocalFireDepartment
+        "Gift" -> Icons.Outlined.CardGiftcard
+        "Wind" -> Icons.Outlined.Air
+        "PhoneCall" -> Icons.Outlined.Phone
+        "Wallet" -> Icons.Outlined.AccountBalanceWallet
+        "Tv" -> Icons.Outlined.Tv
+        "Lightbulb" -> Icons.Outlined.Lightbulb
+        "ListChecks" -> Icons.Outlined.Poll
+        "FolderOpen" -> Icons.Outlined.Folder
+        else -> when (categoryId) {
+            "feedback" -> Icons.Outlined.Place
+            "transport" -> Icons.Outlined.DirectionsBus
+            "news" -> Icons.AutoMirrored.Outlined.Article
+            "planning" -> Icons.Outlined.Layers
+            "utilities" -> Icons.Outlined.Widgets
+            "health" -> Icons.Outlined.LocalHospital
+            "education" -> Icons.Outlined.School
+            "community" -> Icons.Outlined.Groups
+            "government", "public-service" -> Icons.Outlined.AccountBalance
+            else -> Icons.Outlined.Category
+        }
+    }
+}
+
+@Composable
+private fun CatalogServiceItem(
+    service: JSONObject,
+    isPinned: Boolean,
+    onTogglePin: () -> Unit,
+    onClick: () -> Unit
+) {
+    val catId = service.text("category")
+    val isOffline = CatalogCacheManager.isOfflineCapable(service)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(42.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color(0xFFF8FAFC))
+                .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(10.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = getServiceIconOutlined(service.text("icon"), catId),
+                contentDescription = null,
+                tint = Color(0xFF1E293B),
+                modifier = Modifier.size(22.dp)
+            )
+        }
+
+        Spacer(Modifier.width(12.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = service.text("name"),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF0F172A),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+
+                if (isOffline) {
+                    Surface(
+                        color = Color(0xFFF0FDF4),
+                        shape = RoundedCornerShape(4.dp),
+                        border = BorderStroke(0.5.dp, Color(0xFFBBF7D0))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(4.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF16A34A))
+                            )
+                            Text(
+                                text = "Offline",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF15803D)
+                            )
+                        }
+                    }
+                }
+            }
+
+            if (service.text("description").isNotBlank()) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = service.text("description"),
+                    fontSize = 11.5.sp,
+                    color = Color(0xFF64748B),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = 15.sp
+                )
+            }
+        }
+
+        Spacer(Modifier.width(8.dp))
+
+        // Professional Bookmark Icon Button
+        IconButton(
+            onClick = onTogglePin,
+            modifier = Modifier.size(34.dp)
+        ) {
+            Icon(
+                imageVector = if (isPinned) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
+                contentDescription = if (isPinned) "Bỏ lưu" else "Lưu dịch vụ",
+                tint = if (isPinned) Color(0xFF0284C7) else Color(0xFF94A3B8),
+                modifier = Modifier.size(19.dp)
+            )
+        }
+
+        Icon(
+            imageVector = Icons.AutoMirrored.Outlined.ArrowForward,
+            contentDescription = "Xem",
+            tint = Color(0xFFCBD5E1),
+            modifier = Modifier.size(15.dp)
+        )
+    }
+}
+
 @Composable
 fun CatalogScreen(
     signedIn: Boolean = false,
@@ -1923,15 +2136,23 @@ fun CatalogScreen(
     onRegister: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    val catalog = remember {
-        runCatching { JSONObject(context.assets.open("catalog.json").bufferedReader().use { it.readText() }) }
-            .getOrDefault(JSONObject())
+    var cacheRevision by remember { mutableIntStateOf(0) }
+    val catalog = remember(cacheRevision) {
+        CatalogCacheManager.getCatalog(context)
     }
+    val lastSyncedTime = remember(cacheRevision) {
+        CatalogCacheManager.getLastSyncedTimeFormatted(context)
+    }
+    var pinnedIds by remember(cacheRevision) {
+        mutableStateOf(HashSet(CatalogCacheManager.getPinnedIds(context)))
+    }
+
     val categories = catalog.optJSONArray("categories")
     val services = catalog.optJSONArray("services")
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("all") }
+    var selectedFilter by remember { mutableStateOf("all") } // "all", "available", "offline", "planned"
     var inspectService by remember { mutableStateOf<JSONObject?>(null) }
 
     Column(
@@ -1948,7 +2169,7 @@ fun CatalogScreen(
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Icon(
-                imageVector = Icons.Default.ArrowBack,
+                imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
                 contentDescription = "Quay lại",
                 tint = OpenCityColors.BrandAzure,
                 modifier = Modifier.size(16.dp)
@@ -1963,24 +2184,89 @@ fun CatalogScreen(
 
         Spacer(Modifier.height(10.dp))
 
-        Text(
-            text = "Danh mục Dịch vụ Công số",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.ExtraBold,
-            color = OpenCityColors.TextMain
-        )
-        Text(
-            text = "Tra cứu thông tin, quy trình và hướng dẫn các dịch vụ công đô thị.",
-            fontSize = 13.sp,
-            color = OpenCityColors.TextSecondary
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Danh mục Dịch vụ Công số",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = Color(0xFF0F172A)
+                )
+                Text(
+                    text = "Hệ thống tra cứu quy trình, dữ liệu và tiện ích đô thị số.",
+                    fontSize = 13.sp,
+                    color = Color(0xFF64748B)
+                )
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
+
+        // Refined Offline Sync Status Bar
+        Surface(
+            color = Color(0xFFF8FAFC),
+            shape = RoundedCornerShape(10.dp),
+            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF16A34A))
+                    )
+                    Column {
+                        Text(
+                            text = "Bộ nhớ đệm ngoại tuyến (Offline Ready)",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF0F172A)
+                        )
+                        Text(
+                            text = "Đồng bộ: $lastSyncedTime • Dữ liệu sẵn sàng tra cứu không cần mạng",
+                            fontSize = 10.sp,
+                            color = Color(0xFF64748B)
+                        )
+                    }
+                }
+
+                IconButton(
+                    onClick = {
+                        CatalogCacheManager.refreshCacheFromAssets(context)
+                        cacheRevision++
+                    },
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        Icons.Outlined.Sync,
+                        contentDescription = "Đồng bộ lại",
+                        tint = Color(0xFF64748B),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        }
 
         if (!signedIn) {
             Spacer(Modifier.height(8.dp))
             Surface(
-                color = OpenCityColors.BrandAzureLight,
+                color = Color(0xFFF0F9FF),
                 shape = RoundedCornerShape(8.dp),
-                border = BorderStroke(1.dp, OpenCityColors.BrandAzureBorder),
+                border = BorderStroke(1.dp, Color(0xFFBAE6FD)),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
@@ -1988,24 +2274,24 @@ fun CatalogScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Icon(Icons.Default.Explore, contentDescription = null, tint = OpenCityColors.BrandAzure, modifier = Modifier.size(14.dp))
+                    Icon(Icons.Outlined.Info, contentDescription = null, tint = Color(0xFF0284C7), modifier = Modifier.size(14.dp))
                     Text(
                         text = "Chế độ Khách: Tra cứu thông tin mọi dịch vụ công không cần đăng nhập",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = OpenCityColors.BrandAzureDark
+                        color = Color(0xFF0369A1)
                     )
                 }
             }
         }
 
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(10.dp))
 
         // Search Bar
         Surface(
             color = Color.White,
             shape = RoundedCornerShape(12.dp),
-            border = BorderStroke(1.dp, OpenCityColors.BorderColor),
+            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
             modifier = Modifier.fillMaxWidth()
         ) {
             Row(
@@ -2013,11 +2299,16 @@ fun CatalogScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(Icons.Default.Search, contentDescription = null, tint = OpenCityColors.TextLight, modifier = Modifier.size(18.dp))
+                Icon(Icons.Outlined.Search, contentDescription = null, tint = Color(0xFF94A3B8), modifier = Modifier.size(18.dp))
                 TextField(
                     value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    placeholder = { Text("Tìm kiếm dịch vụ công, thủ tục...", fontSize = 13.sp, color = OpenCityColors.TextLight) },
+                    onValueChange = {
+                        searchQuery = it
+                        if (it.isNotBlank() && selectedCategory != "all") {
+                            selectedCategory = "all"
+                        }
+                    },
+                    placeholder = { Text("Tìm kiếm dịch vụ, quy hoạch, xe buýt, AQI...", fontSize = 13.sp, color = Color(0xFF94A3B8)) },
                     modifier = Modifier.weight(1f),
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color.Transparent,
@@ -2029,7 +2320,7 @@ fun CatalogScreen(
                 )
                 if (searchQuery.isNotBlank()) {
                     IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(24.dp)) {
-                        Icon(Icons.Default.Close, contentDescription = "Xóa", tint = OpenCityColors.TextLight, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Outlined.Close, contentDescription = "Xóa", tint = Color(0xFF94A3B8), modifier = Modifier.size(16.dp))
                     }
                 }
             }
@@ -2037,19 +2328,90 @@ fun CatalogScreen(
 
         Spacer(Modifier.height(10.dp))
 
-        if (categories != null) {
+        // Filter Row 1: Status Filters
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            item {
+                FilterChip(
+                    selected = selectedFilter == "all",
+                    onClick = { selectedFilter = "all" },
+                    label = { Text("Tất cả", fontSize = 12.sp, fontWeight = if (selectedFilter == "all") FontWeight.Bold else FontWeight.Normal) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = Color(0xFF0F172A),
+                        selectedLabelColor = Color.White
+                    )
+                )
+            }
+            item {
+                FilterChip(
+                    selected = selectedFilter == "available",
+                    onClick = { selectedFilter = "available" },
+                    label = { Text("Trực tuyến", fontSize = 12.sp, fontWeight = if (selectedFilter == "available") FontWeight.Bold else FontWeight.Normal) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = Color(0xFFF0FDF4),
+                        selectedLabelColor = Color(0xFF15803D)
+                    )
+                )
+            }
+            item {
+                FilterChip(
+                    selected = selectedFilter == "offline",
+                    onClick = { selectedFilter = "offline" },
+                    label = { Text("Sẵn sàng ngoại tuyến", fontSize = 12.sp, fontWeight = if (selectedFilter == "offline") FontWeight.Bold else FontWeight.Normal) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = Color(0xFFF0F9FF),
+                        selectedLabelColor = Color(0xFF0369A1)
+                    )
+                )
+            }
+            item {
+                FilterChip(
+                    selected = selectedFilter == "planned",
+                    onClick = { selectedFilter = "planned" },
+                    label = { Text("Sắp triển khai", fontSize = 12.sp, fontWeight = if (selectedFilter == "planned") FontWeight.Bold else FontWeight.Normal) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = Color(0xFFFFFBEB),
+                        selectedLabelColor = Color(0xFFB45309)
+                    )
+                )
+            }
+        }
+
+        Spacer(Modifier.height(6.dp))
+
+        // Filter Row 2: Category Filters with Dynamic Count Badges (Accounts for Search Query & Status Filter)
+        if (categories != null && services != null) {
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 item {
+                    var totalMatching = 0
+                    for (j in 0 until services.length()) {
+                        val s = services.optJSONObject(j) ?: continue
+                        when (selectedFilter) {
+                            "available" -> if (s.text("status") != "available") continue
+                            "offline" -> if (!CatalogCacheManager.isOfflineCapable(s)) continue
+                            "planned" -> if (s.text("status") != "planned") continue
+                        }
+                        if (searchQuery.isNotBlank()) {
+                            val q = searchQuery.trim().lowercase()
+                            val nameMatch = s.text("name").lowercase().contains(q)
+                            val descMatch = s.text("description").lowercase().contains(q)
+                            val idMatch = s.text("id").lowercase().contains(q)
+                            if (!nameMatch && !descMatch && !idMatch) continue
+                        }
+                        totalMatching++
+                    }
                     FilterChip(
                         selected = selectedCategory == "all",
                         onClick = { selectedCategory = "all" },
-                        label = { Text("Tất cả", fontSize = 12.sp, fontWeight = if (selectedCategory == "all") FontWeight.Bold else FontWeight.Normal) },
+                        label = { Text("Tất cả ($totalMatching)", fontSize = 11.5.sp, fontWeight = if (selectedCategory == "all") FontWeight.Bold else FontWeight.Normal) },
                         colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = OpenCityColors.BrandAzureLight,
-                            selectedLabelColor = OpenCityColors.BrandAzureDark
+                            selectedContainerColor = Color(0xFFE2E8F0),
+                            selectedLabelColor = Color(0xFF0F172A)
                         )
                     )
                 }
@@ -2057,14 +2419,37 @@ fun CatalogScreen(
                     val cat = categories.optJSONObject(i) ?: continue
                     val cId = cat.text("id")
                     val cName = cat.text("name")
+                    var count = 0
+                    for (j in 0 until services.length()) {
+                        val s = services.optJSONObject(j) ?: continue
+                        if (s.text("category") != cId) continue
+                        when (selectedFilter) {
+                            "available" -> if (s.text("status") != "available") continue
+                            "offline" -> if (!CatalogCacheManager.isOfflineCapable(s)) continue
+                            "planned" -> if (s.text("status") != "planned") continue
+                        }
+                        if (searchQuery.isNotBlank()) {
+                            val q = searchQuery.trim().lowercase()
+                            val nameMatch = s.text("name").lowercase().contains(q)
+                            val descMatch = s.text("description").lowercase().contains(q)
+                            val idMatch = s.text("id").lowercase().contains(q)
+                            if (!nameMatch && !descMatch && !idMatch) continue
+                        }
+                        count++
+                    }
                     item {
                         FilterChip(
                             selected = selectedCategory == cId,
-                            onClick = { selectedCategory = cId },
-                            label = { Text(cName, fontSize = 12.sp, fontWeight = if (selectedCategory == cId) FontWeight.Bold else FontWeight.Normal) },
+                            onClick = {
+                                if (count == 0 && searchQuery.isNotBlank()) {
+                                    searchQuery = ""
+                                }
+                                selectedCategory = cId
+                            },
+                            label = { Text("$cName ($count)", fontSize = 11.5.sp, fontWeight = if (selectedCategory == cId) FontWeight.Bold else FontWeight.Normal) },
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = OpenCityColors.BrandAzureLight,
-                                selectedLabelColor = OpenCityColors.BrandAzureDark
+                                selectedContainerColor = Color(0xFFE2E8F0),
+                                selectedLabelColor = Color(0xFF0F172A)
                             )
                         )
                     }
@@ -2074,12 +2459,82 @@ fun CatalogScreen(
 
         Spacer(Modifier.height(10.dp))
 
+        // Main Services Scroll List
         Column(
             modifier = Modifier
                 .weight(1f)
                 .verticalScroll(rememberScrollState())
         ) {
             if (categories != null && services != null) {
+                // Pinned / Bookmarked Section
+                if (pinnedIds.isNotEmpty() && searchQuery.isBlank() && selectedCategory == "all" && selectedFilter == "all") {
+                    val pinnedServices = mutableListOf<JSONObject>()
+                    for (j in 0 until services.length()) {
+                        val s = services.optJSONObject(j) ?: continue
+                        if (s.text("id") in pinnedIds) {
+                            pinnedServices.add(s)
+                        }
+                    }
+
+                    if (pinnedServices.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp, bottom = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    Icons.Outlined.Bookmark,
+                                    contentDescription = null,
+                                    tint = Color(0xFF0284C7),
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Text(
+                                    text = "TIỆN ÍCH ĐÃ LƯU TRUY CẬP NHANH",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 0.6.sp,
+                                    color = Color(0xFF0F172A)
+                                )
+                            }
+                            Text(
+                                text = "${pinnedServices.size} mục",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color(0xFF64748B)
+                            )
+                        }
+
+                        Surface(
+                            color = Color.White,
+                            shape = RoundedCornerShape(14.dp),
+                            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp)
+                        ) {
+                            Column {
+                                pinnedServices.forEachIndexed { index, service ->
+                                    if (index > 0) HorizontalDivider(color = Color(0xFFF1F5F9))
+                                    val sId = service.text("id")
+                                    CatalogServiceItem(
+                                        service = service,
+                                        isPinned = true,
+                                        onTogglePin = {
+                                            CatalogCacheManager.togglePin(context, sId)
+                                            pinnedIds = HashSet(CatalogCacheManager.getPinnedIds(context))
+                                        },
+                                        onClick = { inspectService = service }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
                 var totalFound = 0
                 for (i in 0 until categories.length()) {
                     val category = categories.optJSONObject(i) ?: continue
@@ -2091,6 +2546,15 @@ fun CatalogScreen(
                     for (j in 0 until services.length()) {
                         val s = services.optJSONObject(j) ?: continue
                         if (s.text("category") != catId) continue
+
+                        // Filter check
+                        when (selectedFilter) {
+                            "available" -> if (s.text("status") != "available") continue
+                            "offline" -> if (!CatalogCacheManager.isOfflineCapable(s)) continue
+                            "planned" -> if (s.text("status") != "planned") continue
+                        }
+
+                        // Search query check
                         if (searchQuery.isNotBlank()) {
                             val q = searchQuery.trim().lowercase()
                             val nameMatch = s.text("name").lowercase().contains(q)
@@ -2104,81 +2568,48 @@ fun CatalogScreen(
                     if (matchedServices.isEmpty()) continue
                     totalFound += matchedServices.size
 
-                    SectionHeader(title = "${category.text("name")} (${matchedServices.size})")
+                    // Refined Category Section Header
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 14.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = category.text("name").uppercase(),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.6.sp,
+                            color = Color(0xFF64748B)
+                        )
+                        Text(
+                            text = "${matchedServices.size} dịch vụ",
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color(0xFF94A3B8)
+                        )
+                    }
 
                     Surface(
                         color = Color.White,
-                        shape = RoundedCornerShape(16.dp),
-                        border = BorderStroke(1.dp, OpenCityColors.BorderColor),
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 14.dp)
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
                     ) {
                         Column {
                             matchedServices.forEachIndexed { index, service ->
-                                if (index > 0) HorizontalDivider(color = OpenCityColors.BorderColor)
-
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            inspectService = service
-                                        }
-                                        .padding(14.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = service.text("name"),
-                                            fontSize = 14.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = OpenCityColors.TextMain
-                                        )
-                                        if (service.text("description").isNotBlank()) {
-                                            Text(
-                                                text = service.text("description"),
-                                                fontSize = 12.sp,
-                                                color = OpenCityColors.TextSecondary,
-                                                maxLines = 2,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-                                    }
-
-                                    Spacer(Modifier.width(8.dp))
-
-                                    Surface(
-                                        color = when (service.text("status")) {
-                                            "available" -> OpenCityColors.BrandMintLight
-                                            "planned" -> OpenCityColors.BrandAmberLight
-                                            else -> OpenCityColors.SurfaceBg
-                                        },
-                                        shape = RoundedCornerShape(6.dp)
-                                    ) {
-                                        Text(
-                                            text = when (service.text("status")) {
-                                                "available" -> "Trực tuyến"
-                                                "planned" -> "Sắp triển khai"
-                                                else -> "Cổng DVC"
-                                            },
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = when (service.text("status")) {
-                                                "available" -> OpenCityColors.BrandMintDark
-                                                "planned" -> OpenCityColors.BrandAmberDark
-                                                else -> OpenCityColors.TextLight
-                                            }
-                                        )
-                                    }
-
-                                    Spacer(Modifier.width(6.dp))
-                                    Icon(
-                                        imageVector = Icons.Default.Info,
-                                        contentDescription = "Chi tiết",
-                                        tint = OpenCityColors.BrandAzure,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
+                                if (index > 0) HorizontalDivider(color = Color(0xFFF1F5F9))
+                                val sId = service.text("id")
+                                CatalogServiceItem(
+                                    service = service,
+                                    isPinned = sId in pinnedIds,
+                                    onTogglePin = {
+                                        CatalogCacheManager.togglePin(context, sId)
+                                        pinnedIds = HashSet(CatalogCacheManager.getPinnedIds(context))
+                                    },
+                                    onClick = { inspectService = service }
+                                )
                             }
                         }
                     }
@@ -2186,14 +2617,57 @@ fun CatalogScreen(
 
                 if (totalFound == 0) {
                     Box(
-                        modifier = Modifier.fillMaxWidth().padding(top = 40.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 36.dp, start = 16.dp, end = 16.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.Default.SearchOff, contentDescription = null, tint = OpenCityColors.TextLight, modifier = Modifier.size(40.dp))
-                            Spacer(Modifier.height(8.dp))
-                            Text("Không tìm thấy dịch vụ công phù hợp", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = OpenCityColors.TextSecondary)
-                            Text("Vui lòng thử từ khóa khác hoặc chọn Tất cả danh mục", fontSize = 12.sp, color = OpenCityColors.TextLight)
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(Icons.Outlined.SearchOff, contentDescription = null, tint = Color(0xFF94A3B8), modifier = Modifier.size(44.dp))
+                            Text(
+                                text = if (searchQuery.isNotBlank() && selectedCategory != "all")
+                                    "Không có dịch vụ \"$searchQuery\" trong danh mục này"
+                                else if (searchQuery.isNotBlank())
+                                    "Không tìm thấy kết quả cho \"$searchQuery\""
+                                else
+                                    "Không có dịch vụ nào phù hợp bộ lọc",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF334155),
+                                textAlign = TextAlign.Center
+                            )
+                            Text(
+                                text = if (searchQuery.isNotBlank() && selectedCategory != "all")
+                                    "Từ khóa \"$searchQuery\" có thể thuộc danh mục khác (như Giao thông hoặc Phản ánh)."
+                                else
+                                    "Vui lòng thử từ khóa khác hoặc thiết lập lại bộ lọc.",
+                                fontSize = 12.sp,
+                                color = Color(0xFF64748B),
+                                textAlign = TextAlign.Center
+                            )
+
+                            Spacer(Modifier.height(4.dp))
+
+                            if (selectedCategory != "all") {
+                                Button(
+                                    onClick = { selectedCategory = "all" },
+                                    colors = ButtonDefaults.buttonColors(containerColor = OpenCityColors.BrandAzure),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text("Tìm \"$searchQuery\" trong Tất cả danh mục", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+                            if (searchQuery.isNotBlank()) {
+                                OutlinedButton(
+                                    onClick = { searchQuery = "" },
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text("Xóa từ khóa tìm kiếm", fontSize = 12.sp, color = Color(0xFF334155))
+                                }
+                            }
                         }
                     }
                 }
@@ -2201,6 +2675,7 @@ fun CatalogScreen(
         }
     }
 
+    // Inspect Service Dialog
     inspectService?.let { service ->
         val isAvailable = service.text("status") == "available"
         val route = service.text("route").removePrefix("/")
@@ -2209,10 +2684,14 @@ fun CatalogScreen(
             route in setOf(
                 "reports", "news", "map", "surveys", "appointments",
                 "administrative-feedback", "air-quality", "find-bus", "bus-routes", "hotlines",
-                "communications", "community-groups", "social-feedback", "digital-wards"
+                "communications", "community-groups", "social-feedback", "digital-wards",
+                "new-report", "notifications"
             ) || (isDispatcherOnly && isDispatcher)
         )
         val requiresAuth = route in setOf("reports", "appointments", "administrative-feedback", "new-report", "dispatcher-hub")
+        val isOffline = CatalogCacheManager.isOfflineCapable(service)
+        val sId = service.text("id")
+        val isPinned = sId in pinnedIds
 
         AlertDialog(
             onDismissRequest = { inspectService = null },
@@ -2222,15 +2701,54 @@ fun CatalogScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = service.text("name"),
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 16.sp,
-                        color = OpenCityColors.TextMain,
-                        modifier = Modifier.weight(1f)
-                    )
-                    IconButton(onClick = { inspectService = null }, modifier = Modifier.size(24.dp)) {
-                        Icon(Icons.Default.Close, contentDescription = "Đóng", tint = OpenCityColors.TextLight)
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(38.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0xFFF8FAFC))
+                                .border(1.dp, Color(0xFFE2E8F0), RoundedCornerShape(8.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = getServiceIconOutlined(service.text("icon"), service.text("category")),
+                                contentDescription = null,
+                                tint = Color(0xFF1E293B),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Text(
+                            text = service.text("name"),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = Color(0xFF0F172A),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(
+                            onClick = {
+                                CatalogCacheManager.togglePin(context, sId)
+                                pinnedIds = HashSet(CatalogCacheManager.getPinnedIds(context))
+                            },
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isPinned) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
+                                contentDescription = if (isPinned) "Bỏ lưu" else "Lưu",
+                                tint = if (isPinned) Color(0xFF0284C7) else Color(0xFF94A3B8),
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        IconButton(onClick = { inspectService = null }, modifier = Modifier.size(28.dp)) {
+                            Icon(Icons.Outlined.Close, contentDescription = "Đóng", tint = Color(0xFF94A3B8), modifier = Modifier.size(18.dp))
+                        }
                     }
                 }
             },
@@ -2242,43 +2760,67 @@ fun CatalogScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Surface(
                             color = when (service.text("status")) {
-                                "available" -> OpenCityColors.BrandMintLight
-                                "planned" -> OpenCityColors.BrandAmberLight
-                                else -> Color(0xFFEFF6FF)
+                                "available" -> Color(0xFFF0FDF4)
+                                "planned" -> Color(0xFFFFFBEB)
+                                else -> Color(0xFFF8FAFC)
                             },
-                            shape = RoundedCornerShape(6.dp)
+                            shape = RoundedCornerShape(6.dp),
+                            border = BorderStroke(
+                                0.5.dp,
+                                when (service.text("status")) {
+                                    "available" -> Color(0xFFBBF7D0)
+                                    "planned" -> Color(0xFFFDE68A)
+                                    else -> Color(0xFFE2E8F0)
+                                }
+                            )
                         ) {
                             Text(
                                 text = when (service.text("status")) {
-                                    "available" -> "✓ Đang vận hành trực tuyến"
-                                    "planned" -> "⏳ Đang thử nghiệm"
-                                    else -> "🔗 Cổng Dịch vụ công Quốc gia"
+                                    "available" -> "Trực tuyến"
+                                    "planned" -> "Sắp triển khai"
+                                    else -> "Cổng DVC Quốc gia"
                                 },
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                 fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
+                                fontWeight = FontWeight.SemiBold,
                                 color = when (service.text("status")) {
-                                    "available" -> OpenCityColors.BrandMintDark
-                                    "planned" -> OpenCityColors.BrandAmberDark
-                                    else -> OpenCityColors.BrandAzure
+                                    "available" -> Color(0xFF15803D)
+                                    "planned" -> Color(0xFFB45309)
+                                    else -> Color(0xFF475569)
                                 }
                             )
                         }
 
+                        if (isOffline) {
+                            Surface(
+                                color = Color(0xFFF0FDF4),
+                                shape = RoundedCornerShape(6.dp),
+                                border = BorderStroke(0.5.dp, Color(0xFFBBF7D0))
+                            ) {
+                                Text(
+                                    text = "Offline Ready",
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF15803D)
+                                )
+                            }
+                        }
+
                         Surface(
-                            color = OpenCityColors.SurfaceBg,
+                            color = Color(0xFFF1F5F9),
                             shape = RoundedCornerShape(6.dp)
                         ) {
                             Text(
                                 text = "Mã: ${service.text("id")}",
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
                                 fontSize = 10.sp,
-                                color = OpenCityColors.TextSecondary
+                                color = Color(0xFF64748B)
                             )
                         }
                     }
@@ -2287,18 +2829,41 @@ fun CatalogScreen(
                         Text(
                             text = service.text("description"),
                             fontSize = 13.sp,
-                            color = OpenCityColors.TextSecondary,
+                            color = Color(0xFF475569),
                             lineHeight = 18.sp
                         )
                     }
 
-                    HorizontalDivider(color = OpenCityColors.BorderColor)
+                    if (isOffline) {
+                        Surface(
+                            color = Color(0xFFF8FAFC),
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, Color(0xFFE2E8F0)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(9.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Outlined.CloudDone, contentDescription = null, tint = Color(0xFF16A34A), modifier = Modifier.size(16.dp))
+                                Text(
+                                    text = "Dữ liệu tiện ích này đã được lưu trong bộ nhớ đệm. Bạn có thể tra cứu bình thường ngay cả khi không có kết nối Internet.",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF334155),
+                                    lineHeight = 15.sp
+                                )
+                            }
+                        }
+                    }
+
+                    HorizontalDivider(color = Color(0xFFE2E8F0))
 
                     Text(
-                        text = "Thông tin tra cứu thủ tục & hướng dẫn:",
+                        text = "Quy trình & Hướng dẫn giải quyết:",
                         fontWeight = FontWeight.Bold,
                         fontSize = 12.sp,
-                        color = OpenCityColors.BrandNavy
+                        color = Color(0xFF0F172A)
                     )
 
                     Surface(
@@ -2309,20 +2874,20 @@ fun CatalogScreen(
                     ) {
                         Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Row {
-                                Text("• Cơ quan thực hiện: ", fontWeight = FontWeight.SemiBold, fontSize = 11.sp, color = OpenCityColors.TextMain)
-                                Text("UBND Thành phố / Đơn vị chuyên trách", fontSize = 11.sp, color = OpenCityColors.TextSecondary)
+                                Text("• Cơ quan thực hiện: ", fontWeight = FontWeight.SemiBold, fontSize = 11.sp, color = Color(0xFF0F172A))
+                                Text("UBND Thành phố / Đơn vị chuyên trách", fontSize = 11.sp, color = Color(0xFF475569))
                             }
                             Row {
-                                Text("• Đối tượng: ", fontWeight = FontWeight.SemiBold, fontSize = 11.sp, color = OpenCityColors.TextMain)
-                                Text("Công dân, tổ chức, doanh nghiệp trên địa bàn", fontSize = 11.sp, color = OpenCityColors.TextSecondary)
+                                Text("• Đối tượng tiếp nhận: ", fontWeight = FontWeight.SemiBold, fontSize = 11.sp, color = Color(0xFF0F172A))
+                                Text("Công dân, tổ chức, doanh nghiệp trên địa bàn", fontSize = 11.sp, color = Color(0xFF475569))
                             }
                             Row {
-                                Text("• Cách thức: ", fontWeight = FontWeight.SemiBold, fontSize = 11.sp, color = OpenCityColors.TextMain)
-                                Text(if (canNavigate) "Nộp trực tuyến qua app OpenCity" else "Cổng DVC / Trực tiếp tại bộ phận một cửa", fontSize = 11.sp, color = OpenCityColors.TextSecondary)
+                                Text("• Cách thức: ", fontWeight = FontWeight.SemiBold, fontSize = 11.sp, color = Color(0xFF0F172A))
+                                Text(if (canNavigate) "Trực tuyến qua ứng dụng OpenCity" else "Cổng DVC / Trực tiếp tại bộ phận một cửa", fontSize = 11.sp, color = Color(0xFF475569))
                             }
                             Row {
-                                Text("• Lệ phí: ", fontWeight = FontWeight.SemiBold, fontSize = 11.sp, color = OpenCityColors.TextMain)
-                                Text("Miễn phí / Theo quy định hiện hành", fontSize = 11.sp, color = OpenCityColors.BrandMintDark)
+                                Text("• Lệ phí: ", fontWeight = FontWeight.SemiBold, fontSize = 11.sp, color = Color(0xFF0F172A))
+                                Text("Miễn phí / Theo quy định hiện hành", fontSize = 11.sp, color = Color(0xFF15803D))
                             }
                         }
                     }
@@ -2339,7 +2904,7 @@ fun CatalogScreen(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(Icons.Default.AdminPanelSettings, contentDescription = null, tint = Color(0xFF2563EB), modifier = Modifier.size(18.dp))
+                                Icon(Icons.Outlined.AdminPanelSettings, contentDescription = null, tint = Color(0xFF2563EB), modifier = Modifier.size(18.dp))
                                 Text(
                                     text = "Dịch vụ tác nghiệp nội bộ dành riêng cho Cán bộ điều phối hiện trường (reports_dispatcher). Vui lòng đăng nhập với tài khoản Cán bộ để truy cập.",
                                     fontSize = 11.sp,
@@ -2350,9 +2915,9 @@ fun CatalogScreen(
                         }
                     } else if (!signedIn && requiresAuth) {
                         Surface(
-                            color = OpenCityColors.BrandAmberLight,
+                            color = Color(0xFFFFFBEB),
                             shape = RoundedCornerShape(8.dp),
-                            border = BorderStroke(1.dp, OpenCityColors.BrandAmberDark.copy(alpha = 0.3f)),
+                            border = BorderStroke(1.dp, Color(0xFFFDE68A)),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Row(
@@ -2360,11 +2925,11 @@ fun CatalogScreen(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(Icons.Default.Info, contentDescription = null, tint = OpenCityColors.BrandAmberDark, modifier = Modifier.size(16.dp))
+                                Icon(Icons.Outlined.Info, contentDescription = null, tint = Color(0xFFB45309), modifier = Modifier.size(16.dp))
                                 Text(
                                     text = "Bạn đang tra cứu ở Chế độ Khách. Để gửi hồ sơ hoặc tạo yêu cầu, vui lòng Đăng ký hoặc Đăng nhập tài khoản.",
                                     fontSize = 11.sp,
-                                    color = OpenCityColors.BrandAmberDark,
+                                    color = Color(0xFFB45309),
                                     lineHeight = 15.sp
                                 )
                             }
@@ -2416,7 +2981,7 @@ fun CatalogScreen(
                             colors = ButtonDefaults.buttonColors(containerColor = OpenCityColors.BrandAzure),
                             shape = RoundedCornerShape(10.dp)
                         ) {
-                            Text("Truy cập tiện ích", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("Truy cập tiện ích →", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 } else {
@@ -2436,7 +3001,7 @@ fun CatalogScreen(
                             onNavigate(route)
                         }
                     ) {
-                        Text("Xem thử màn hình", fontSize = 11.sp, color = OpenCityColors.TextSecondary)
+                        Text("Xem thử màn hình", fontSize = 11.sp, color = Color(0xFF64748B))
                     }
                 }
             }
@@ -2444,9 +3009,7 @@ fun CatalogScreen(
     }
 }
 
-// ==========================================
 // SHARED HELPER COMPONENTS
-// ==========================================
 @Composable
 internal fun SectionTitle(title: String) {
     SectionHeader(title = title)
@@ -2519,6 +3082,100 @@ internal fun EmptyPlaceholder(message: String) {
                 color = OpenCityColors.TextMuted,
                 textAlign = TextAlign.Center
             )
+        }
+    }
+}
+
+@Composable
+internal fun LoginGateCard(
+    title: String = "Yêu cầu đăng nhập tài khoản Công dân",
+    description: String = "Tính năng này yêu cầu định danh tài khoản công dân DX-OS để xem thông tin và tham gia tương tác.",
+    onLogin: (() -> Unit)? = null,
+    onBack: (() -> Unit)? = null
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp),
+        color = Color.White,
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, OpenCityColors.BorderColor),
+        shadowElevation = 1.dp
+    ) {
+        Column(
+            modifier = Modifier.padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = OpenCityColors.BrandAzure.copy(alpha = 0.1f),
+                modifier = Modifier.size(56.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Outlined.Lock,
+                        contentDescription = null,
+                        tint = OpenCityColors.BrandAzure,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            }
+
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = Color(0xFFF1F5F9),
+                border = BorderStroke(1.dp, Color(0xFFCBD5E1))
+            ) {
+                Text(
+                    text = "XÁC THỰC TÀI KHOẢN CÔNG DÂN",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF475569),
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                )
+            }
+
+            Text(
+                text = title,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = OpenCityColors.TextMain,
+                textAlign = TextAlign.Center
+            )
+
+            Text(
+                text = description,
+                fontSize = 13.sp,
+                color = OpenCityColors.TextSecondary,
+                textAlign = TextAlign.Center,
+                lineHeight = 18.sp
+            )
+
+            Spacer(Modifier.height(4.dp))
+
+            if (onLogin != null) {
+                Button(
+                    onClick = onLogin,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = OpenCityColors.BrandAzure),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Đăng nhập tài khoản DX-OS", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                }
+            }
+
+            if (onBack != null) {
+                OutlinedButton(
+                    onClick = onBack,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("Quay lại danh sách", fontSize = 13.sp, color = OpenCityColors.TextSecondary)
+                }
+            }
         }
     }
 }

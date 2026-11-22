@@ -14,23 +14,19 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
-class ApiClient(private val context: Context, private val auth: AuthManager) {
+class ApiClient(private val context: Context, val auth: AuthManager) {
     private val http = OkHttpClient.Builder().callTimeout(25, TimeUnit.SECONDS).build()
     private val publicCollections = setOf(
         "/bulletins", "/hotlines", "/air-quality/summary", "/air-quality/stations",
-        "/bus/routes", "/bus/stops", "/bus/find", "/bus/audit",
-        "/digital-wards", "/communications", "/community-groups", "/surveys"
+        "/bus/routes", "/bus/stops", "/bus/find", "/bus/audit"
     )
     private val publicDetails = listOf(
         Regex("^/bulletins/[A-Za-z0-9_.:-]{1,128}$"),
         Regex("^/air-quality/stations/[A-Za-z0-9_.:-]{1,128}$"),
-        Regex("^/bus/(routes|stops)/[A-Za-z0-9_.:-]{1,128}$"),
-        Regex("^/digital-wards/[A-Za-z0-9_.:-]{1,128}$"),
-        Regex("^/communications/[A-Za-z0-9_.:-]{1,128}$"),
-        Regex("^/surveys/[A-Za-z0-9_.:-]{1,128}$")
+        Regex("^/bus/(routes|stops)/[A-Za-z0-9_.:-]{1,128}$")
     )
 
-    private fun isPublicRead(path: String): Boolean {
+    fun isPublicRead(path: String): Boolean {
         val route = path.substringBefore('?')
         return route in publicCollections || publicDetails.any { it.matches(route) }
     }
@@ -59,11 +55,11 @@ class ApiClient(private val context: Context, private val auth: AuthManager) {
                         auth.accessToken()
                     } catch (e: Exception) {
                         if (method == "GET" && isPublicRead(path)) null
-                        else throw IllegalStateException(e.message ?: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.")
+                        else throw IllegalStateException("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.")
                     }
                 }
                 method == "GET" && isPublicRead(path) -> null
-                else -> throw IllegalStateException("Vui lòng đăng nhập để sử dụng chức năng này.")
+                else -> throw IllegalStateException("Yêu cầu đăng nhập tài khoản công dân DX-OS để sử dụng tính năng này.")
             }
             val base = resolveBaseUrl()
             val gatewayUrl = "$base/api/opencity$path"
@@ -90,7 +86,13 @@ class ApiClient(private val context: Context, private val auth: AuthManager) {
             resp.use { response ->
                 val value = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
+                    if (response.code == 401) {
+                        throw IllegalStateException("Yêu cầu đăng nhập tài khoản công dân DX-OS để sử dụng tính năng này.")
+                    }
                     val detail = runCatching { JSONObject(value).optString("detail") }.getOrNull()
+                    if (detail != null && (detail.contains("token", ignoreCase = true) || detail.contains("unauthorized", ignoreCase = true))) {
+                        throw IllegalStateException("Yêu cầu đăng nhập tài khoản công dân DX-OS để sử dụng tính năng này.")
+                    }
                     throw IllegalStateException(detail?.takeIf { it.isNotBlank() } ?: "HTTP ${response.code}")
                 }
                 value

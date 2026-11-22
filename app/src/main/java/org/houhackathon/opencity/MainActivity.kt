@@ -316,6 +316,7 @@ private fun OpenCityApp(
                             path = "/reports",
                             title = "Phản ánh hiện trường",
                             revision = revision,
+                            onLogin = login,
                             onClick = {
                                 detailKind = "report"
                                 detailId = it
@@ -348,6 +349,7 @@ private fun OpenCityApp(
                             path = "/surveys",
                             title = "Khảo sát ý kiến cư dân",
                             revision = revision,
+                            onLogin = login,
                             onClick = {
                                 detailKind = "survey"
                                 detailId = it
@@ -436,6 +438,7 @@ private fun OpenCityApp(
                             kind = detailKind,
                             id = detailId,
                             revision = revision,
+                            onLogin = login,
                             onBack = {
                                 page = if (detailReturnPage.isNotBlank() && detailReturnPage != "reports") {
                                     val ret = detailReturnPage
