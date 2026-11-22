@@ -1,491 +1,533 @@
-package org.houhackathon.opencity
-
-import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.*
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Article
-import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-
-class MainActivity : ComponentActivity() {
-    private val auth by lazy { AuthManager(this) }
-    private val api by lazy { ApiClient(this, auth) }
-    private var authMessage by mutableStateOf<String?>(null)
-    private val signIn = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        auth.completeSignIn(result.data) { authMessage = it }
-    }
-    private val registerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        auth.completeSignIn(result.data) { authMessage = it }
-    }
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContent {
-            OpenCityApp(
-                auth = auth,
-                api = api,
-                login = {
-                    authMessage = null
-                    signIn.launch(auth.signInIntent())
-                },
-                register = {
-                    authMessage = null
-                    registerLauncher.launch(auth.registerIntent())
-                },
-                authMessage = authMessage,
-                clearAuthMessage = { authMessage = null }
-            )
-        }
-    }
-
-    override fun onDestroy() {
-        auth.close()
-        super.onDestroy()
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun OpenCityApp(
-    auth: AuthManager,
-    api: ApiClient,
-    login: () -> Unit,
-    register: () -> Unit,
-    authMessage: String?,
-    clearAuthMessage: () -> Unit
-) {
-    var page by remember { mutableStateOf("home") }
-    var detailId by remember { mutableStateOf("") }
-    var detailKind by remember { mutableStateOf("") }
-    var detailReturnPage by remember { mutableStateOf("reports") }
-    var revision by remember { mutableIntStateOf(0) }
-    var notificationReturnPage by remember { mutableStateOf("home") }
-    var unreadNotifications by remember { mutableIntStateOf(0) }
-    var guestMode by remember { mutableStateOf(false) }
-    val signedIn = auth.signedIn
-    val rootPages = setOf("home", "reports", "news", "map", "account")
-
-    val tabs = listOf(
-        Triple("home", "Khám phá", Icons.Default.Home),
-        Triple("reports", "Phản ánh", Icons.AutoMirrored.Filled.List),
-        Triple("news", "Tin tức", Icons.AutoMirrored.Filled.Article),
-        Triple("map", "Bản đồ", Icons.Default.Map),
-        Triple("account", "Tài khoản", Icons.Default.AccountCircle)
-    )
-
-    LaunchedEffect(signedIn, page, revision) {
-        unreadNotifications = if (signedIn) runCatching {
-            api.list("/notifications").count { it.text("read_at").isBlank() }
-        }.getOrDefault(0) else 0
-    }
-
-    OpenCityTheme {
-        Scaffold(
-            topBar = {
-                Surface(
-                    color = OpenCityColors.CardBg,
-                    shadowElevation = 2.dp,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .statusBarsPadding()
-                            .padding(
-                                start = if (page in rootPages) 18.dp else 6.dp,
-                                end = 18.dp,
-                                top = 8.dp,
-                                bottom = 8.dp
-                            ),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        if (page in rootPages) {
-                            OpenCityLogo(size = 36.dp, showSubtitle = true)
-
-                            // Notification inbox and profile shortcuts
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (signedIn) {
-                                    IconButton(onClick = {
-                                        notificationReturnPage = page
-                                        page = "notifications"
-                                    }) {
-                                        BadgedBox(badge = {
-                                            if (unreadNotifications > 0) Badge {
-                                                Text(if (unreadNotifications > 99) "99+" else "$unreadNotifications")
-                                            }
-                                        }) {
-                                            Icon(Icons.Default.Notifications, contentDescription = "Thông báo",
-                                                tint = OpenCityColors.BrandAzure)
-                                        }
-                                    }
-                                }
-                            Box(
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .clip(CircleShape)
-                                    .background(OpenCityColors.BrandAzureLight)
-                                    .clickable { page = "account" },
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Person,
-                                    contentDescription = "Tài khoản",
-                                    tint = OpenCityColors.BrandAzure,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                            }
-                        } else {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                IconButton(
-                                    onClick = {
-                                        page = when (page) {
-                                            "detail" -> if (detailReturnPage.isNotBlank() && detailReturnPage != "reports") {
-                                                val ret = detailReturnPage
-                                                detailReturnPage = "reports"
-                                                ret
-                                            } else when (detailKind) {
-                                                "report" -> "reports"
-                                                "bulletin" -> "news"
-                                                "communication" -> "communications"
-                                                else -> "surveys"
-                                            }
-                                            "new-report" -> "reports"
-                                            "catalog" -> "home"
-                                            "surveys" -> "home"
-                                            "appointments" -> "home"
-                                            "administrative-feedback" -> "home"
-                                            "air-quality" -> "home"
-                                            "find-bus" -> "home"
-                                            "bus-routes" -> "home"
-                                            "hotlines" -> "home"
-                                            "communications" -> "home"
-                                            "community-groups" -> "home"
-                                            "social-feedback" -> "home"
-                                            "digital-wards" -> "home"
-                                            "dispatcher-hub" -> "account"
-                                            "notifications" -> notificationReturnPage
-                                            else -> "home"
-                                        }
-                                    }
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                        contentDescription = "Quay lại",
-                                        tint = OpenCityColors.TextMain
-                                    )
-                                }
-                                Text(
-                                    text = pageTitle(page, detailKind),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = OpenCityColors.TextMain
-                                )
-                            }
-                        }
-                    }
-                }
-            },
-            bottomBar = {
-                if (page in rootPages) {
-                    NavigationBar(
-                        containerColor = OpenCityColors.CardBg,
-                        tonalElevation = 8.dp,
-                        modifier = Modifier.shadow(8.dp)
-                    ) {
-                        tabs.forEach { (key, label, icon) ->
-                            val isSelected = page == key
-                            NavigationBarItem(
-                                selected = isSelected,
-                                onClick = { page = key },
-                                icon = {
-                                    Icon(
-                                        imageVector = icon,
-                                        contentDescription = label,
-                                        tint = if (isSelected) OpenCityColors.BrandAzure else OpenCityColors.TextMuted
-                                    )
-                                },
-                                label = {
-                                    Text(
-                                        text = label,
-                                        fontSize = 11.sp,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                        color = if (isSelected) OpenCityColors.BrandAzure else OpenCityColors.TextMuted
-                                    )
-                                },
-                                colors = NavigationBarItemDefaults.colors(
-                                    indicatorColor = OpenCityColors.BrandAzureLight
-                                )
-                            )
-                        }
-                    }
-                }
-            }
-        ) { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(OpenCityColors.SurfaceBg)
-                    .padding(padding)
-            ) {
-                // Auth Feedback Notification Banner
-                authMessage?.let { msg ->
-                    Surface(
-                        color = OpenCityColors.BrandAmberLight,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = msg,
-                                modifier = Modifier.weight(1f),
-                                color = OpenCityColors.BrandAmberDark,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                            TextButton(onClick = clearAuthMessage) {
-                                Text("Đóng", color = OpenCityColors.BrandAmberDark, fontWeight = FontWeight.Bold)
-                            }
-                        }
-                    }
-                }
-
-                // Main Navigation Routing
-                val publicPage = guestMode || page in setOf(
-                    "home", "news", "hotlines", "catalog", "account", "bus-network", "air-quality",
-                    "digital-wards", "communications", "community-groups", "surveys"
-                ) || (page == "detail" && detailKind in setOf("bulletin", "communication", "survey"))
-                if (!signedIn && !publicPage) {
-                    WelcomeScreen(
-                        login = login,
-                        register = register,
-                        onExplore = { guestMode = true },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    when (page) {
-                        "home" -> HomeScreen(
-                            api = api,
-                            revision = revision,
-                            signedIn = signedIn,
-                            onNavigate = { page = it },
-                            onDetail = { kind, id ->
-                                detailKind = kind
-                                detailId = id
-                                page = "detail"
-                            }
-                        )
-                        "reports" -> ListScreen(
-                            api = api,
-                            path = "/reports",
-                            title = "Phản ánh hiện trường",
-                            revision = revision,
-                            onLogin = login,
-                            onClick = {
-                                detailKind = "report"
-                                detailId = it
-                                page = "detail"
-                            },
-                            action = {
-                                Button(
-                                    onClick = { page = "new-report" },
-                                    colors = ButtonDefaults.buttonColors(containerColor = OpenCityColors.BrandAzure),
-                                    shape = RoundedCornerShape(14.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text("+ Gửi phản ánh hiện trường mới", fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        )
-                        "news" -> ListScreen(
-                            api = api,
-                            path = "/bulletins",
-                            title = "Tin tức & cảnh báo",
-                            revision = revision,
-                            onClick = {
-                                detailKind = "bulletin"
-                                detailId = it
-                                page = "detail"
-                            }
-                        )
-                        "surveys" -> ListScreen(
-                            api = api,
-                            path = "/surveys",
-                            title = "Khảo sát ý kiến cư dân",
-                            revision = revision,
-                            onLogin = login,
-                            onClick = {
-                                detailKind = "survey"
-                                detailId = it
-                                page = "detail"
-                            }
-                        )
-                        "appointments" -> AppointmentsScreen(api = api, revision = revision)
-                        "administrative-feedback" -> AdministrativeFeedbackScreen(api = api, revision = revision)
-                        "air-quality" -> AirQualityScreen(api = api, revision = revision)
-                        "find-bus" -> BusNetworkScreen(api = api, revision = revision, initialTab = "plan")
-                        "bus-routes" -> BusNetworkScreen(api = api, revision = revision, initialTab = "routes")
-                        "hotlines" -> HotlinesScreen(api = api, revision = revision)
-                        "communications" -> ListScreen(api = api, path = "/communications", title = "Thông tin truyền thông", revision = revision,
-                            onClick = { detailKind = "communication"; detailId = it; page = "detail" })
-                        "community-groups" -> CommunityGroupsScreen(api = api, revision = revision)
-                        "social-feedback" -> SocialFeedbackScreen(api = api, revision = revision)
-                        "digital-wards" -> DigitalWardScreen(api = api, revision = revision, onNavigate = { page = it })
-                        "map" -> MapScreen(
-                            api = api,
-                            revision = revision,
-                            onDetail = { kind, id ->
-                                detailKind = kind
-                                detailId = id
-                                page = "detail"
-                            },
-                            onNavigate = { page = it }
-                        )
-                        "account" -> AccountScreen(
-                            signedIn = signedIn,
-                            userName = auth.userName,
-                            isDispatcher = auth.isDispatcher,
-                            roleBadge = auth.roleBadge,
-                            roleTitle = auth.roleTitle,
-                            login = login,
-                            register = register,
-                            onLogout = {
-                                auth.signOut()
-                                page = "home"
-                            },
-                            onSurveys = { page = "surveys" },
-                            onCatalog = { page = "catalog" },
-                            onDispatcherHub = { page = "dispatcher-hub" }
-                        )
-                        "dispatcher-hub" -> DispatcherHubScreen(
-                            api = api,
-                            revision = revision,
-                            isDispatcher = auth.isDispatcher,
-                            onNavigateBack = { page = "account" },
-                            onViewReportDetail = { id ->
-                                detailKind = "report"
-                                detailId = id
-                                detailReturnPage = "dispatcher-hub"
-                                page = "detail"
-                            }
-                        )
-                        "catalog" -> CatalogScreen(
-                            signedIn = signedIn,
-                            isDispatcher = auth.isDispatcher,
-                            onBack = { page = "home" },
-                            onNavigate = { page = it },
-                            onLogin = login,
-                            onRegister = register
-                        )
-                        "notifications" -> NotificationsScreen(
-                            api = api,
-                            revision = revision,
-                            onReport = { id ->
-                                detailKind = "report"
-                                detailId = id
-                                revision++
-                                page = "detail"
-                            }
-                        )
-                        "new-report" -> NewReportScreen(
-                            api = api,
-                            context = LocalContext.current,
-                            onCreated = { id ->
-                                detailKind = "report"
-                                detailId = id
-                                revision++
-                                page = "detail"
-                            }
-                        )
-                        "detail" -> DetailScreen(
-                            api = api,
-                            kind = detailKind,
-                            id = detailId,
-                            revision = revision,
-                            onLogin = login,
-                            onBack = {
-                                page = if (detailReturnPage.isNotBlank() && detailReturnPage != "reports") {
-                                    val ret = detailReturnPage
-                                    detailReturnPage = "reports"
-                                    ret
-                                } else when (detailKind) {
-                                    "report" -> "reports"
-                                    "bulletin" -> "news"
-                                    "communication" -> "communications"
-                                    else -> "surveys"
-                                }
-                            },
-                            onChanged = { revision++ }
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-private fun pageTitle(page: String, detailKind: String = ""): String = when (page) {
-    "reports" -> "Hồ sơ phản ánh"
-    "news" -> "Tin tức & Cảnh báo"
-    "map" -> "Bản đồ đô thị số"
-    "account" -> "Tài khoản công dân"
-    "surveys" -> "Khảo sát ý kiến"
-    "appointments" -> "Tiếp công dân"
-    "administrative-feedback" -> "Phản ánh thủ tục hành chính"
-    "air-quality" -> "Chất lượng không khí VN-AQI"
-    "find-bus" -> "Mạng lưới xe buýt"
-    "bus-routes" -> "Mạng lưới xe buýt"
-    "hotlines" -> "Đường dây nóng"
-    "communications" -> "Thông tin truyền thông"
-    "community-groups" -> "Nhóm cộng đồng"
-    "social-feedback" -> "Góp ý xã hội"
-    "digital-wards" -> "Xã/phường số"
-    "new-report" -> "Tạo phản ánh mới"
-    "dispatcher-hub" -> "Trung tâm Tác nghiệp Cán bộ"
-    "catalog" -> "Danh mục dịch vụ"
-    "notifications" -> "Thông báo"
-    "detail" -> when (detailKind) {
-        "report" -> "Chi tiết phản ánh"
-        "bulletin" -> "Chi tiết bản tin"
-        "communication" -> "Thông tin truyền thông"
-        "survey" -> "Biểu quyết khảo sát"
-        else -> "Chi tiết"
-    }
-    else -> "OpenCity"
-}
+package org.houhackathon.opencity
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Article
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+
+class MainActivity : ComponentActivity() {
+    private val auth by lazy { AuthManager(this) }
+    private val api by lazy { ApiClient(this, auth) }
+    private var authMessage by mutableStateOf<String?>(null)
+    private val signIn = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        auth.completeSignIn(result.data) { authMessage = it }
+    }
+    private val registerLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        auth.completeSignIn(result.data) { authMessage = it }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent {
+            OpenCityApp(
+                auth = auth,
+                api = api,
+                login = {
+                    authMessage = null
+                    signIn.launch(auth.signInIntent())
+                },
+                register = {
+                    authMessage = null
+                    registerLauncher.launch(auth.registerIntent())
+                },
+                authMessage = authMessage,
+                clearAuthMessage = { authMessage = null }
+            )
+        }
+    }
+
+    override fun onDestroy() {
+        auth.close()
+        super.onDestroy()
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun OpenCityApp(
+    auth: AuthManager,
+    api: ApiClient,
+    login: () -> Unit,
+    register: () -> Unit,
+    authMessage: String?,
+    clearAuthMessage: () -> Unit
+) {
+    var page by remember { mutableStateOf("home") }
+    var detailId by remember { mutableStateOf("") }
+    var detailKind by remember { mutableStateOf("") }
+    var detailReturnPage by remember { mutableStateOf("reports") }
+    var revision by remember { mutableIntStateOf(0) }
+    var notificationReturnPage by remember { mutableStateOf("home") }
+    var unreadNotifications by remember { mutableIntStateOf(0) }
+    var guestMode by remember { mutableStateOf(false) }
+    val signedIn = auth.signedIn
+    val rootPages = setOf("home", "reports", "news", "map", "account")
+
+    val tabs = listOf(
+        Triple("home", "Khám phá", Icons.Default.Home),
+        Triple("reports", "Phản ánh", Icons.AutoMirrored.Filled.List),
+        Triple("news", "Tin tức", Icons.AutoMirrored.Filled.Article),
+        Triple("map", "Bản đồ", Icons.Default.Map),
+        Triple("account", "Tài khoản", Icons.Default.AccountCircle)
+    )
+
+    LaunchedEffect(signedIn, page, revision) {
+        unreadNotifications = if (signedIn) runCatching {
+            api.list("/notifications").count { it.text("read_at").isBlank() }
+        }.getOrDefault(0) else 0
+    }
+
+    OpenCityTheme {
+        Scaffold(
+            topBar = {
+                Surface(
+                    color = OpenCityColors.CardBg,
+                    shadowElevation = 2.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .padding(
+                                start = if (page in rootPages) 18.dp else 6.dp,
+                                end = 18.dp,
+                                top = 8.dp,
+                                bottom = 8.dp
+                            ),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        if (page in rootPages) {
+                            OpenCityLogo(size = 36.dp, showSubtitle = true)
+
+                            // Notification inbox and profile shortcuts
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (signedIn) {
+                                    IconButton(onClick = {
+                                        notificationReturnPage = page
+                                        page = "notifications"
+                                    }) {
+                                        BadgedBox(badge = {
+                                            if (unreadNotifications > 0) Badge {
+                                                Text(if (unreadNotifications > 99) "99+" else "$unreadNotifications")
+                                            }
+                                        }) {
+                                            Icon(Icons.Default.Notifications, contentDescription = "Thông báo",
+                                                tint = OpenCityColors.BrandAzure)
+                                        }
+                                    }
+                                }
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(OpenCityColors.BrandAzureLight)
+                                    .clickable { page = "account" },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = "Tài khoản",
+                                    tint = OpenCityColors.BrandAzure,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            }
+                        } else {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                IconButton(
+                                    onClick = {
+                                        page = when (page) {
+                                            "detail" -> if (detailReturnPage.isNotBlank() && detailReturnPage != "reports") {
+                                                val ret = detailReturnPage
+                                                detailReturnPage = "reports"
+                                                ret
+                                            } else when (detailKind) {
+                                                "report" -> "reports"
+                                                "bulletin" -> "news"
+                                                "communication" -> "communications"
+                                                else -> "surveys"
+                                            }
+                                            "new-report" -> "reports"
+                                            "catalog" -> "home"
+                                            "surveys" -> "home"
+                                            "appointments" -> "home"
+                                            "administrative-feedback" -> "home"
+                                            "air-quality" -> "home"
+                                            "find-bus" -> "home"
+                                            "bus-routes" -> "home"
+                                            "hotlines" -> "home"
+                                            "communications" -> "home"
+                                            "community-groups" -> "home"
+                                            "social-feedback" -> "home"
+                                            "digital-wards" -> "home"
+                                            "dispatcher-hub" -> "account"
+                                            "notifications" -> notificationReturnPage
+                                            else -> "home"
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "Quay lại",
+                                        tint = OpenCityColors.TextMain
+                                    )
+                                }
+                                Text(
+                                    text = pageTitle(page, detailKind),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = OpenCityColors.TextMain
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            bottomBar = {
+                if (page in rootPages) {
+                    NavigationBar(
+                        containerColor = OpenCityColors.CardBg,
+                        tonalElevation = 8.dp,
+                        modifier = Modifier.shadow(8.dp)
+                    ) {
+                        tabs.forEach { (key, label, icon) ->
+                            val isSelected = page == key
+                            NavigationBarItem(
+                                selected = isSelected,
+                                onClick = { page = key },
+                                icon = {
+                                    Icon(
+                                        imageVector = icon,
+                                        contentDescription = label,
+                                        tint = if (isSelected) OpenCityColors.BrandAzure else OpenCityColors.TextMuted
+                                    )
+                                },
+                                label = {
+                                    Text(
+                                        text = label,
+                                        fontSize = 11.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        color = if (isSelected) OpenCityColors.BrandAzure else OpenCityColors.TextMuted
+                                    )
+                                },
+                                colors = NavigationBarItemDefaults.colors(
+                                    indicatorColor = OpenCityColors.BrandAzureLight
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        ) { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(OpenCityColors.SurfaceBg)
+                    .padding(padding)
+            ) {
+                // Auth Feedback Notification Banner
+                authMessage?.let { msg ->
+                    Surface(
+                        color = OpenCityColors.BrandAmberLight,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = msg,
+                                modifier = Modifier.weight(1f),
+                                color = OpenCityColors.BrandAmberDark,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            TextButton(onClick = clearAuthMessage) {
+                                Text("Đóng", color = OpenCityColors.BrandAmberDark, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+
+                // Main Navigation Routing
+                val publicPage = guestMode || page in setOf(
+                    "home", "news", "hotlines", "catalog", "account", "bus-network", "air-quality",
+                    "digital-wards", "communications", "community-groups", "surveys", "business-feedback", "dashboard"
+                ) || (page == "detail" && detailKind in setOf("bulletin", "communication", "survey"))
+                if (!signedIn && !publicPage) {
+                    WelcomeScreen(
+                        login = login,
+                        register = register,
+                        onExplore = { guestMode = true },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    when (page) {
+                        "home" -> HomeScreen(
+                            api = api,
+                            revision = revision,
+                            signedIn = signedIn,
+                            onNavigate = { page = it },
+                            onDetail = { kind, id ->
+                                detailKind = kind
+                                detailId = id
+                                page = "detail"
+                            }
+                        )
+                        "reports" -> ListScreen(
+                            api = api,
+                            path = "/reports",
+                            title = "Phản ánh hiện trường",
+                            revision = revision,
+                            onLogin = login,
+                            onClick = {
+                                detailKind = "report"
+                                detailId = it
+                                page = "detail"
+                            },
+                            action = {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Button(
+                                        onClick = { page = "new-report" },
+                                        colors = ButtonDefaults.buttonColors(containerColor = OpenCityColors.BrandAzure),
+                                        shape = RoundedCornerShape(14.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("+ Gửi phản ánh hiện trường mới", fontWeight = FontWeight.Bold)
+                                    }
+                                    OutlinedButton(
+                                        onClick = { page = "dashboard" },
+                                        shape = RoundedCornerShape(14.dp),
+                                        modifier = Modifier.fillMaxWidth(),
+                                        border = BorderStroke(1.dp, OpenCityColors.BrandAzureBorder),
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = OpenCityColors.BrandAzure)
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Icon(Icons.Default.Speed, contentDescription = null, modifier = Modifier.size(16.dp))
+                                            Text("Xem biểu đồ tiến độ & thống kê đô thị", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                        "news" -> ListScreen(
+                            api = api,
+                            path = "/bulletins",
+                            title = "Tin tức & cảnh báo",
+                            revision = revision,
+                            onClick = {
+                                detailKind = "bulletin"
+                                detailId = it
+                                page = "detail"
+                            }
+                        )
+                        "surveys" -> ListScreen(
+                            api = api,
+                            path = "/surveys",
+                            title = "Khảo sát ý kiến cư dân",
+                            revision = revision,
+                            onLogin = login,
+                            onClick = {
+                                detailKind = "survey"
+                                detailId = it
+                                page = "detail"
+                            }
+                        )
+                        "appointments" -> AppointmentsScreen(api = api, revision = revision)
+                        "administrative-feedback" -> AdministrativeFeedbackScreen(api = api, revision = revision)
+                        "business-feedback" -> BusinessFeedbackScreen(
+                            api = api,
+                            revision = revision,
+                            signedIn = signedIn,
+                            onLogin = login,
+                            onBack = { page = "home" }
+                        )
+                        "dashboard" -> MunicipalDashboardScreen(
+                            api = api,
+                            revision = revision,
+                            signedIn = signedIn,
+                            onDetailReport = { id ->
+                                detailKind = "report"
+                                detailId = id
+                                page = "detail"
+                            },
+                            onNewReport = { page = "new-report" },
+                            onBack = { page = "home" }
+                        )
+                        "air-quality" -> AirQualityScreen(api = api, revision = revision)
+                        "find-bus" -> BusNetworkScreen(api = api, revision = revision, initialTab = "plan")
+                        "bus-routes" -> BusNetworkScreen(api = api, revision = revision, initialTab = "routes")
+                        "hotlines" -> HotlinesScreen(api = api, revision = revision)
+                        "communications" -> ListScreen(api = api, path = "/communications", title = "Thông tin truyền thông", revision = revision,
+                            onClick = { detailKind = "communication"; detailId = it; page = "detail" })
+                        "community-groups" -> CommunityGroupsScreen(api = api, revision = revision)
+                        "social-feedback" -> SocialFeedbackScreen(api = api, revision = revision)
+                        "digital-wards" -> DigitalWardScreen(api = api, revision = revision, onNavigate = { page = it })
+                        "map" -> MapScreen(
+                            api = api,
+                            revision = revision,
+                            onDetail = { kind, id ->
+                                detailKind = kind
+                                detailId = id
+                                page = "detail"
+                            },
+                            onNavigate = { page = it }
+                        )
+                        "account" -> AccountScreen(
+                            signedIn = signedIn,
+                            userName = auth.userName,
+                            isDispatcher = auth.isDispatcher,
+                            roleBadge = auth.roleBadge,
+                            roleTitle = auth.roleTitle,
+                            login = login,
+                            register = register,
+                            onLogout = {
+                                auth.signOut()
+                                page = "home"
+                            },
+                            onSurveys = { page = "surveys" },
+                            onCatalog = { page = "catalog" },
+                            onBusinessFeedback = { page = "business-feedback" },
+                            onDashboard = { page = "dashboard" },
+                            onDispatcherHub = { page = "dispatcher-hub" }
+                        )
+                        "dispatcher-hub" -> DispatcherHubScreen(
+                            api = api,
+                            revision = revision,
+                            isDispatcher = auth.isDispatcher,
+                            onNavigateBack = { page = "account" },
+                            onViewReportDetail = { id ->
+                                detailKind = "report"
+                                detailId = id
+                                detailReturnPage = "dispatcher-hub"
+                                page = "detail"
+                            }
+                        )
+                        "catalog" -> CatalogScreen(
+                            signedIn = signedIn,
+                            isDispatcher = auth.isDispatcher,
+                            onBack = { page = "home" },
+                            onNavigate = { page = it },
+                            onLogin = login,
+                            onRegister = register
+                        )
+                        "notifications" -> NotificationsScreen(
+                            api = api,
+                            revision = revision,
+                            onReport = { id ->
+                                detailKind = "report"
+                                detailId = id
+                                revision++
+                                page = "detail"
+                            }
+                        )
+                        "new-report" -> NewReportScreen(
+                            api = api,
+                            context = LocalContext.current,
+                            onCreated = { id ->
+                                detailKind = "report"
+                                detailId = id
+                                revision++
+                                page = "detail"
+                            }
+                        )
+                        "detail" -> DetailScreen(
+                            api = api,
+                            kind = detailKind,
+                            id = detailId,
+                            revision = revision,
+                            onLogin = login,
+                            onBack = {
+                                page = if (detailReturnPage.isNotBlank() && detailReturnPage != "reports") {
+                                    val ret = detailReturnPage
+                                    detailReturnPage = "reports"
+                                    ret
+                                } else when (detailKind) {
+                                    "report" -> "reports"
+                                    "bulletin" -> "news"
+                                    "communication" -> "communications"
+                                    else -> "surveys"
+                                }
+                            },
+                            onChanged = { revision++ }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun pageTitle(page: String, detailKind: String = ""): String = when (page) {
+    "reports" -> "Hồ sơ phản ánh"
+    "news" -> "Tin tức & Cảnh báo"
+    "map" -> "Bản đồ đô thị số"
+    "account" -> "Tài khoản công dân"
+    "surveys" -> "Khảo sát ý kiến"
+    "appointments" -> "Tiếp công dân"
+    "administrative-feedback" -> "Phản ánh thủ tục hành chính"
+    "business-feedback" -> "Doanh nghiệp kiến nghị"
+    "dashboard" -> "Dashboard Thống kê Đô thị"
+    "air-quality" -> "Chất lượng không khí VN-AQI"
+    "find-bus" -> "Mạng lưới xe buýt"
+    "bus-routes" -> "Mạng lưới xe buýt"
+    "hotlines" -> "Đường dây nóng"
+    "communications" -> "Thông tin truyền thông"
+    "community-groups" -> "Nhóm cộng đồng"
+    "social-feedback" -> "Góp ý xã hội"
+    "digital-wards" -> "Xã/phường số"
+    "new-report" -> "Tạo phản ánh mới"
+    "dispatcher-hub" -> "Trung tâm Tác nghiệp Cán bộ"
+    "catalog" -> "Danh mục dịch vụ"
+    "notifications" -> "Thông báo"
+    "detail" -> when (detailKind) {
+        "report" -> "Chi tiết phản ánh"
+        "bulletin" -> "Chi tiết bản tin"
+        "communication" -> "Thông tin truyền thông"
+        "survey" -> "Biểu quyết khảo sát"
+        else -> "Chi tiết"
+    }
+    else -> "OpenCity"
+}
