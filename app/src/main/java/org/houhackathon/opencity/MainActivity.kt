@@ -81,6 +81,7 @@ private fun OpenCityApp(
     var page by remember { mutableStateOf("home") }
     var detailId by remember { mutableStateOf("") }
     var detailKind by remember { mutableStateOf("") }
+    var detailReturnPage by remember { mutableStateOf("reports") }
     var revision by remember { mutableIntStateOf(0) }
     var notificationReturnPage by remember { mutableStateOf("home") }
     var unreadNotifications by remember { mutableIntStateOf(0) }
@@ -167,7 +168,11 @@ private fun OpenCityApp(
                                 IconButton(
                                     onClick = {
                                         page = when (page) {
-                                            "detail" -> when (detailKind) {
+                                            "detail" -> if (detailReturnPage.isNotBlank() && detailReturnPage != "reports") {
+                                                val ret = detailReturnPage
+                                                detailReturnPage = "reports"
+                                                ret
+                                            } else when (detailKind) {
                                                 "report" -> "reports"
                                                 "bulletin" -> "news"
                                                 "communication" -> "communications"
@@ -186,6 +191,7 @@ private fun OpenCityApp(
                                             "community-groups" -> "home"
                                             "social-feedback" -> "home"
                                             "digital-wards" -> "home"
+                                            "dispatcher-hub" -> "account"
                                             "notifications" -> notificationReturnPage
                                             else -> "home"
                                         }
@@ -372,6 +378,9 @@ private fun OpenCityApp(
                         "account" -> AccountScreen(
                             signedIn = signedIn,
                             userName = auth.userName,
+                            isDispatcher = auth.isDispatcher,
+                            roleBadge = auth.roleBadge,
+                            roleTitle = auth.roleTitle,
                             login = login,
                             register = register,
                             onLogout = {
@@ -379,10 +388,24 @@ private fun OpenCityApp(
                                 page = "home"
                             },
                             onSurveys = { page = "surveys" },
-                            onCatalog = { page = "catalog" }
+                            onCatalog = { page = "catalog" },
+                            onDispatcherHub = { page = "dispatcher-hub" }
+                        )
+                        "dispatcher-hub" -> DispatcherHubScreen(
+                            api = api,
+                            revision = revision,
+                            isDispatcher = auth.isDispatcher,
+                            onNavigateBack = { page = "account" },
+                            onViewReportDetail = { id ->
+                                detailKind = "report"
+                                detailId = id
+                                detailReturnPage = "dispatcher-hub"
+                                page = "detail"
+                            }
                         )
                         "catalog" -> CatalogScreen(
                             signedIn = signedIn,
+                            isDispatcher = auth.isDispatcher,
                             onBack = { page = "home" },
                             onNavigate = { page = it },
                             onLogin = login,
@@ -414,7 +437,11 @@ private fun OpenCityApp(
                             id = detailId,
                             revision = revision,
                             onBack = {
-                                page = when (detailKind) {
+                                page = if (detailReturnPage.isNotBlank() && detailReturnPage != "reports") {
+                                    val ret = detailReturnPage
+                                    detailReturnPage = "reports"
+                                    ret
+                                } else when (detailKind) {
                                     "report" -> "reports"
                                     "bulletin" -> "news"
                                     "communication" -> "communications"
@@ -447,6 +474,7 @@ private fun pageTitle(page: String, detailKind: String = ""): String = when (pag
     "social-feedback" -> "Góp ý xã hội"
     "digital-wards" -> "Xã/phường số"
     "new-report" -> "Tạo phản ánh mới"
+    "dispatcher-hub" -> "Trung tâm Tác nghiệp Cán bộ"
     "catalog" -> "Danh mục dịch vụ"
     "notifications" -> "Thông báo"
     "detail" -> when (detailKind) {

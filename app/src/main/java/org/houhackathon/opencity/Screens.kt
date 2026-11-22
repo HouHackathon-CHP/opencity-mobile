@@ -1082,12 +1082,26 @@ fun DetailScreen(
 
         Spacer(Modifier.height(12.dp))
 
-        error?.let { ErrorBanner(it) }
+        error?.let {
+            ErrorBanner(it)
+            Spacer(Modifier.height(10.dp))
+            OutlinedButton(
+                onClick = { localRevision++ },
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = OpenCityColors.BrandAzure),
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            ) {
+                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Thử tải lại")
+            }
+        }
 
         val data = item
         if (data == null) {
-            Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = OpenCityColors.BrandAzure)
+            if (error == null) {
+                Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = OpenCityColors.BrandAzure)
+                }
             }
             return@Column
         }
@@ -1576,11 +1590,15 @@ private fun TimelineNode(action: String, timestamp: String, note: String?, isLas
 fun AccountScreen(
     signedIn: Boolean,
     userName: String? = null,
+    isDispatcher: Boolean = false,
+    roleBadge: String = "guest",
+    roleTitle: String = "Khách vãng lai",
     login: () -> Unit,
     register: () -> Unit = {},
     onLogout: () -> Unit,
     onSurveys: () -> Unit,
-    onCatalog: () -> Unit
+    onCatalog: () -> Unit,
+    onDispatcherHub: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -1590,7 +1608,7 @@ fun AccountScreen(
             .padding(16.dp)
     ) {
         Text(
-            text = "Hồ sơ công dân",
+            text = if (isDispatcher) "Hồ sơ Cán bộ tác nghiệp" else "Hồ sơ công dân",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.ExtraBold,
             color = OpenCityColors.TextMain
@@ -1598,7 +1616,7 @@ fun AccountScreen(
 
         Spacer(Modifier.height(14.dp))
 
-        // Digital Citizen ID Card Mockup
+        // Digital Citizen / Operator ID Card Mockup
         Surface(
             shape = RoundedCornerShape(20.dp),
             shadowElevation = 6.dp,
@@ -1621,15 +1639,27 @@ fun AccountScreen(
                     ) {
                         NexusPortalMark(size = 32.dp)
                         Surface(
-                            color = if (signedIn) Color(0x3310B981) else Color(0x333B82F6),
+                            color = when {
+                                isDispatcher -> Color(0x33818CF8)
+                                signedIn -> Color(0x3310B981)
+                                else -> Color(0x333B82F6)
+                            },
                             shape = RoundedCornerShape(10.dp)
                         ) {
                             Text(
-                                text = if (signedIn) "✓ ĐÃ ĐỊNH DANH DX-OS" else "CHẾ ĐỘ KHÁCH",
+                                text = when {
+                                    isDispatcher -> "✓ CÁN BỘ ĐIỀU PHỐI DX-OS"
+                                    signedIn -> "✓ ĐÃ ĐỊNH DANH DX-OS"
+                                    else -> "CHẾ ĐỘ KHÁCH"
+                                },
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = if (signedIn) Color(0xFF6EE7B7) else Color(0xFF93C5FD)
+                                color = when {
+                                    isDispatcher -> Color(0xFFA5B4FC)
+                                    signedIn -> Color(0xFF6EE7B7)
+                                    else -> Color(0xFF93C5FD)
+                                }
                             )
                         }
                     }
@@ -1637,7 +1667,11 @@ fun AccountScreen(
                     Spacer(Modifier.height(20.dp))
 
                     Text(
-                        text = if (signedIn) "HỒ SƠ TÀI KHOẢN ĐỊNH DANH" else "PHIÊN DUYỆT CÔNG KHAI",
+                        text = when {
+                            isDispatcher -> "HỒ SƠ CÁN BỘ ĐIỀU PHỐI & TÁC NGHIỆP"
+                            signedIn -> "HỒ SƠ TÀI KHOẢN ĐỊNH DANH"
+                            else -> "PHIÊN DUYỆT CÔNG KHAI"
+                        },
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
                         color = Color(0xFF94A3B8),
@@ -1667,10 +1701,14 @@ fun AccountScreen(
                             color = Color(0xFFCBD5E1)
                         )
                         Text(
-                            text = if (signedIn) "citizen" else "guest",
+                            text = roleBadge,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (signedIn) Color(0xFF6EE7B7) else Color(0xFF93C5FD)
+                            color = when {
+                                isDispatcher -> Color(0xFFA5B4FC)
+                                signedIn -> Color(0xFF6EE7B7)
+                                else -> Color(0xFF93C5FD)
+                            }
                         )
                     }
                 }
@@ -1711,6 +1749,16 @@ fun AccountScreen(
                     subtitle = "Xem sơ đồ các tiện ích số trên toàn thành phố",
                     onClick = onCatalog
                 )
+                if (isDispatcher) {
+                    HorizontalDivider(color = OpenCityColors.BorderColor)
+                    MenuItem(
+                        icon = Icons.Default.SupportAgent,
+                        iconColor = Color(0xFF2563EB),
+                        title = "Tác nghiệp Cán bộ",
+                        subtitle = "Phân luồng hồ sơ hiện trường bằng AI & Duyệt lịch tiếp dân trực tuyến",
+                        onClick = onDispatcherHub
+                    )
+                }
             }
         }
 
@@ -1868,6 +1916,7 @@ private fun MenuItem(
 @Composable
 fun CatalogScreen(
     signedIn: Boolean = false,
+    isDispatcher: Boolean = false,
     onBack: () -> Unit,
     onNavigate: (String) -> Unit,
     onLogin: () -> Unit = {},
@@ -2155,12 +2204,15 @@ fun CatalogScreen(
     inspectService?.let { service ->
         val isAvailable = service.text("status") == "available"
         val route = service.text("route").removePrefix("/")
-        val canNavigate = isAvailable && route in setOf(
-            "reports", "news", "map", "surveys", "appointments",
-            "administrative-feedback", "air-quality", "find-bus", "bus-routes", "hotlines",
-            "communications", "community-groups", "social-feedback", "digital-wards"
+        val isDispatcherOnly = route == "dispatcher-hub"
+        val canNavigate = isAvailable && (
+            route in setOf(
+                "reports", "news", "map", "surveys", "appointments",
+                "administrative-feedback", "air-quality", "find-bus", "bus-routes", "hotlines",
+                "communications", "community-groups", "social-feedback", "digital-wards"
+            ) || (isDispatcherOnly && isDispatcher)
         )
-        val requiresAuth = route in setOf("reports", "appointments", "administrative-feedback", "new-report")
+        val requiresAuth = route in setOf("reports", "appointments", "administrative-feedback", "new-report", "dispatcher-hub")
 
         AlertDialog(
             onDismissRequest = { inspectService = null },
@@ -2275,7 +2327,28 @@ fun CatalogScreen(
                         }
                     }
 
-                    if (!signedIn && requiresAuth) {
+                    if (isDispatcherOnly && !isDispatcher) {
+                        Surface(
+                            color = Color(0xFFEFF6FF),
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, Color(0xFFBFDBFE)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.AdminPanelSettings, contentDescription = null, tint = Color(0xFF2563EB), modifier = Modifier.size(18.dp))
+                                Text(
+                                    text = "Dịch vụ tác nghiệp nội bộ dành riêng cho Cán bộ điều phối hiện trường (reports_dispatcher). Vui lòng đăng nhập với tài khoản Cán bộ để truy cập.",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF1E40AF),
+                                    lineHeight = 15.sp
+                                )
+                            }
+                        }
+                    } else if (!signedIn && requiresAuth) {
                         Surface(
                             color = OpenCityColors.BrandAmberLight,
                             shape = RoundedCornerShape(8.dp),
@@ -2300,7 +2373,18 @@ fun CatalogScreen(
                 }
             },
             confirmButton = {
-                if (canNavigate) {
+                if (isDispatcherOnly && !isDispatcher) {
+                    Button(
+                        onClick = {
+                            inspectService = null
+                            onLogin()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2563EB)),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text("Đăng nhập Cán bộ", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                } else if (canNavigate) {
                     if (!signedIn && requiresAuth) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(

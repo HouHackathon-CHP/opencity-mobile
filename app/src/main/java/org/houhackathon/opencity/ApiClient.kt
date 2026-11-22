@@ -54,7 +54,14 @@ class ApiClient(private val context: Context, private val auth: AuthManager) {
     private suspend fun request(path: String, method: String = "GET", body: okhttp3.RequestBody? = null): String =
         withContext(Dispatchers.IO) {
             val token = when {
-                auth.signedIn -> runCatching { auth.accessToken() }.getOrNull()
+                auth.signedIn -> {
+                    try {
+                        auth.accessToken()
+                    } catch (e: Exception) {
+                        if (method == "GET" && isPublicRead(path)) null
+                        else throw IllegalStateException(e.message ?: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.")
+                    }
+                }
                 method == "GET" && isPublicRead(path) -> null
                 else -> throw IllegalStateException("Vui lòng đăng nhập để sử dụng chức năng này.")
             }
@@ -145,4 +152,7 @@ class ApiClient(private val context: Context, private val auth: AuthManager) {
         }
         return JSONObject(request("/reports", "POST", body.build()))
     }
+
+    suspend fun post(path: String, value: JSONObject = JSONObject()): JSONObject = itemPost(path, value)
+    suspend fun get(path: String): JSONObject = item(path)
 }
