@@ -83,13 +83,6 @@ class AuthManager(context: Context) {
         )
     }
 
-    private val registrationConfiguration by lazy {
-        AuthorizationServiceConfiguration(
-            Uri.parse("${identityBaseUrl}/realms/dxos/protocol/openid-connect/registrations"),
-            Uri.parse("${identityBaseUrl}/realms/dxos/protocol/openid-connect/token")
-        )
-    }
-
     private val isEmulator: Boolean by lazy {
         android.os.Build.FINGERPRINT.startsWith("generic") ||
                 android.os.Build.FINGERPRINT.startsWith("unknown") ||
@@ -185,7 +178,7 @@ class AuthManager(context: Context) {
 
     fun registerIntent(): Intent {
         val request = AuthorizationRequest.Builder(
-            registrationConfiguration,
+            configuration,
             "dxos-mobile",
             ResponseTypeValues.CODE,
             Uri.parse("opencity://auth")
