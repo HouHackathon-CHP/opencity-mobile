@@ -510,7 +510,7 @@ private fun pageTitle(page: String, detailKind: String = ""): String = when (pag
     "administrative-feedback" -> "Phản ánh thủ tục hành chính"
     "business-feedback" -> "Doanh nghiệp kiến nghị"
     "dashboard" -> "Dashboard Thống kê Đô thị"
-    "air-quality" -> "Chất lượng không khí VN-AQI"
+    "air-quality" -> "Chất lượng không khí AQI"
     "find-bus" -> "Mạng lưới xe buýt"
     "bus-routes" -> "Mạng lưới xe buýt"
     "hotlines" -> "Đường dây nóng"

@@ -385,11 +385,11 @@ fun MapScreen(
                         }
                     }
                     MapCategory.AQI -> {
-                        val aqi = pt.aqiValue ?: 0
+                        val aqi = pt.aqiValue
                         when (aqiFilterLevel) {
-                            "good" -> aqi <= 50
-                            "moderate" -> aqi in 51..100
-                            "unhealthy" -> aqi > 100
+                            "good" -> aqi != null && aqi <= 50
+                            "moderate" -> aqi != null && aqi in 51..100
+                            "unhealthy" -> aqi != null && aqi > 100
                             else -> true
                         }
                     }
@@ -2010,8 +2010,9 @@ private fun GisInteractiveDetailCard(
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        val aqiVal = point.aqiValue ?: 50
-                        val (aqiBg, aqiTextColor) = getAqiColors(aqiVal)
+                        val aqiVal = point.aqiValue
+                        val (aqiBg, aqiTextColor) = aqiVal?.let(::getAqiColors)
+                            ?: (Color(0xFFE2E8F0) to Color(0xFF475569))
                         Surface(
                             color = aqiBg,
                             shape = RoundedCornerShape(12.dp),
@@ -2022,7 +2023,7 @@ private fun GisInteractiveDetailCard(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Center
                             ) {
-                                Text(text = "$aqiVal", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = aqiTextColor)
+                                Text(text = aqiVal?.toString() ?: "—", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = aqiTextColor)
                                 Text(text = "AQI", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = aqiTextColor)
                             }
                         }
@@ -2030,11 +2031,11 @@ private fun GisInteractiveDetailCard(
                         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text(text = "Chất lượng:", fontSize = 11.sp, color = OpenCityColors.TextLight)
-                                Text(text = point.aqiLabel.ifBlank { "Tốt" }, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = aqiTextColor)
+                                Text(text = point.aqiLabel.ifBlank { "Chưa có AQI" }, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = aqiTextColor)
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                point.pm25?.let { Text(text = "PM2.5: $it µg/m³", fontSize = 10.sp, color = OpenCityColors.TextSecondary) }
-                                point.pm10?.let { Text(text = "PM10: $it µg/m³", fontSize = 10.sp, color = OpenCityColors.TextSecondary) }
+                                point.pm25?.let { Text(text = "AQI PM2.5: $it", fontSize = 10.sp, color = OpenCityColors.TextSecondary) }
+                                point.pm10?.let { Text(text = "AQI PM10: $it", fontSize = 10.sp, color = OpenCityColors.TextSecondary) }
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 point.temperature?.let { Text(text = "Nhiệt độ: $it°C", fontSize = 10.sp, color = OpenCityColors.TextLight) }
@@ -2045,8 +2046,9 @@ private fun GisInteractiveDetailCard(
 
                     Spacer(Modifier.height(6.dp))
                     val adviceText = when {
-                        (point.aqiValue ?: 0) <= 50 -> "Vùng không khí sạch. Rất thuận lợi cho mọi hoạt động thể chất ngoài trời."
-                        (point.aqiValue ?: 0) <= 100 -> "Không khí ở mức chấp nhận được. Nhóm cực kỳ nhạy cảm nên chú ý nếu thấy mệt."
+                        point.aqiValue == null -> "Trạm chưa công bố AQI hiện tại."
+                        point.aqiValue <= 50 -> "Vùng không khí sạch. Rất thuận lợi cho mọi hoạt động thể chất ngoài trời."
+                        point.aqiValue <= 100 -> "Không khí ở mức chấp nhận được. Nhóm cực kỳ nhạy cảm nên chú ý nếu thấy mệt."
                         else -> "Không khí kém. Người già, trẻ nhỏ và người có bệnh hô hấp nên đeo khẩu trang chống bụi PM2.5."
                     }
                     Surface(
@@ -2411,7 +2413,7 @@ private fun buildAqiZonesGeoJson(
     val features = JSONArray()
 
     aqiPoints.forEach { pt ->
-        val aqi = pt.aqiValue ?: 50
+        val aqi = pt.aqiValue ?: return@forEach
         val isSelected = selectedId == pt.id
         val color = when {
             aqi <= 50 -> "#22c55e"
@@ -2524,7 +2526,7 @@ private fun clusterGisPoints(points: List<GisMapPoint>, zoom: Double): List<GisC
 
     for ((layer, layerPoints) in groupedByLayer) {
         if (layer == GisLayer.AQI_SENSORS) {
-            // Trạm quan trắc AQI không bao giờ gom cụm khi zoom xa để luôn hiển thị chính xác chỉ số VN-AQI và vòng radar từng khu vực
+            // Giữ từng trạm quan trắc trên bản đồ khi zoom xa để hiển thị đúng chỉ số của từng điểm.
             for (pt in layerPoints) {
                 result.add(GisCluster(pt.lat, pt.lon, listOf(pt)))
             }
@@ -2838,7 +2840,7 @@ private fun GisMapLibreView(
                         val isDest = isRouteActive && points.size > 1 && points.lastOrNull()?.id == pt.id
                         createBusMarkerBitmap(context, isOrigin = isOrigin, isDestination = isDest)
                     }
-                    GisLayer.AQI_SENSORS -> createAqiMarkerBitmap(context, pt.aqiValue ?: 50)
+                    GisLayer.AQI_SENSORS -> createAqiMarkerBitmap(context, pt.aqiValue)
                 }
             } else {
                 createClusterMarkerBitmap(context, cluster.count, cluster.layer, cluster.hasAlert)
@@ -2982,13 +2984,14 @@ private fun drawBusSilhouette(canvas: Canvas, cx: Float, cy: Float, density: Flo
     canvas.drawCircle(bR - bW * 0.24f, lightY, headLightR, winPaint)
 }
 
-private fun createAqiMarkerBitmap(context: Context, aqi: Int): Bitmap {
+private fun createAqiMarkerBitmap(context: Context, aqi: Int?): Bitmap {
     val density = context.resources.displayMetrics.density
     val size = (38 * density).toInt()
     val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
 
     val color = when {
+        aqi == null -> android.graphics.Color.parseColor("#64748b")
         aqi <= 50 -> android.graphics.Color.parseColor("#16a34a")
         aqi <= 100 -> android.graphics.Color.parseColor("#d97706")
         aqi <= 150 -> android.graphics.Color.parseColor("#ea580c")
@@ -3024,7 +3027,7 @@ private fun createAqiMarkerBitmap(context: Context, aqi: Int): Bitmap {
     }
 
     val yPos = radius - (textPaint.descent() + textPaint.ascent()) / 2
-    canvas.drawText(aqi.toString(), radius, yPos, textPaint)
+    canvas.drawText(aqi?.toString() ?: "—", radius, yPos, textPaint)
 
     return bitmap
 }
@@ -3224,9 +3227,9 @@ private fun JSONObject.asAqiPoint(): GisMapPoint? {
     val latest = optJSONObject("latest_reading")
     val classification = optJSONObject("classification")
 
-    val aqi = latest?.optInt("aqi", 50) ?: if (has("aqi") && !isNull("aqi")) optInt("aqi") else 50
-    val level = classification?.optString("level") ?: optString("level", if (aqi <= 50) "good" else "moderate")
-    val label = classification?.optString("label") ?: optString("label", if (aqi <= 50) "Tốt" else "Vừa phải")
+    val aqi = latest?.optInt("aqi") ?: if (has("aqi") && !isNull("aqi")) optInt("aqi") else null
+    val level = classification?.optString("level") ?: optString("level", "unknown")
+    val label = classification?.optString("label") ?: optString("label", "Chưa có AQI")
 
     val pm25Val = latest?.optDouble("pm25", Double.NaN)?.takeIf { !it.isNaN() }
         ?: if (has("pm25") && !isNull("pm25")) optDouble("pm25") else null
