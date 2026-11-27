@@ -421,7 +421,7 @@ private fun pageTitle(page: String, detailKind: String = ""): String = when (pag
     "surveys" -> "Khảo sát ý kiến"
     "appointments" -> "Tiếp công dân"
     "administrative-feedback" -> "Phản ánh thủ tục hành chính"
-    "air-quality" -> "Chất lượng không khí VN-AQI"
+    "air-quality" -> "Chất lượng không khí AQI"
     "hotlines" -> "Đường dây nóng"
     "communications" -> "Thông tin truyền thông"
     "community-groups" -> "Nhóm cộng đồng"

@@ -63,6 +63,7 @@ import org.maplibre.android.annotations.MarkerOptions
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.camera.CameraUpdateFactory
 import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.geometry.LatLngBounds
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
@@ -164,7 +165,7 @@ private fun extractCleanNameAndDistrict(station: JSONObject): Pair<String, Strin
     return cleanName to district
 }
 
-// VN-AQI
+// WAQI uses the US EPA AQI scale.
 private val AqiColorGood = Color(0xFF10B981)              // 0-50: Tốt (Xanh ngọc)
 private val AqiColorModerate = Color(0xFFF59E0B)          // 51-100: Trung bình (Vàng hổ phách)
 private val AqiColorUnhealthySens = Color(0xFFF97316)     // 101-150: Kém (Cam)
@@ -221,27 +222,6 @@ private fun aqiQuickAdvice(aqi: Int): Pair<String, List<String>> = when {
             listOf("Ở trong nhà, đóng kín cửa", "Bật máy lọc khí tối đa", "Tránh ra ngoài")
 }
 
-private fun defaultSummary(): JSONObject = JSONObject("""
-{
-  "total_stations": 6,
-  "average_aqi": 83,
-  "classification": {
-    "level": "moderate",
-    "label": "Trung bình"
-  },
-  "updated_at": "2026-11-15T12:30:00Z"
-}
-""")
-
-private fun defaultStations(): List<JSONObject> = listOf(
-    JSONObject("""{"code":"HN-BD","name":"Hoàng Diệu - Ba Đình","district":"Ba Đình","address":"Số 12 Hoàng Diệu, Ba Đình, Hà Nội","latitude":21.0372,"longitude":105.8398,"status":"active","latest_reading":{"aqi":45,"pm25":12.8,"pm10":24.0,"temperature":27.0,"humidity":70.0,"co":0.2,"no2":14.0,"so2":5.0,"o3":18.0},"classification":{"level":"good","label":"Tốt"}}"""),
-    JSONObject("""{"code":"HN-HK","name":"Đinh Tiên Hoàng - Hoàn Kiếm","district":"Hoàn Kiếm","address":"Số 36 Đinh Tiên Hoàng, Hoàn Kiếm, Hà Nội","latitude":21.0305,"longitude":105.8524,"status":"active","latest_reading":{"aqi":75,"pm25":22.4,"pm10":38.0,"temperature":28.0,"humidity":68.0,"co":0.3,"no2":18.0,"so2":6.5,"o3":21.0},"classification":{"level":"moderate","label":"Trung bình"}}"""),
-    JSONObject("""{"code":"HN-HBT","name":"Đại Cồ Việt - Hai Bà Trưng","district":"Hai Bà Trưng","address":"Số 1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội","latitude":21.0082,"longitude":105.8458,"status":"active","latest_reading":{"aqi":88,"pm25":29.5,"pm10":45.2,"temperature":28.0,"humidity":65.0,"co":0.4,"no2":22.0,"so2":8.5,"o3":24.0},"classification":{"level":"moderate","label":"Trung bình"}}"""),
-    JSONObject("""{"code":"HN-DD","name":"Nguyễn Lương Bằng - Đống Đa","district":"Đống Đa","address":"Số 180 Nguyễn Lương Bằng, Đống Đa, Hà Nội","latitude":21.0182,"longitude":105.8290,"status":"active","latest_reading":{"aqi":92,"pm25":31.0,"pm10":49.0,"temperature":28.5,"humidity":64.0,"co":0.4,"no2":24.0,"so2":9.0,"o3":23.0},"classification":{"level":"moderate","label":"Trung bình"}}"""),
-    JSONObject("""{"code":"HN-TH","name":"Lạc Long Quân - Tây Hồ","district":"Tây Hồ","address":"Số 680 Lạc Long Quân, Tây Hồ, Hà Nội","latitude":21.0725,"longitude":105.8195,"status":"active","latest_reading":{"aqi":48,"pm25":14.0,"pm10":26.0,"temperature":26.8,"humidity":72.0,"co":0.2,"no2":15.0,"so2":5.5,"o3":19.0},"classification":{"level":"good","label":"Tốt"}}"""),
-    JSONObject("""{"code":"HN-CG","name":"Cầu Giấy","district":"Cầu Giấy","address":"Số 122 Cầu Giấy, Cầu Giấy, Hà Nội","latitude":21.0360,"longitude":105.7905,"status":"active","latest_reading":{"aqi":128,"pm25":48.0,"pm10":76.5,"temperature":29.5,"humidity":62.0,"co":0.6,"no2":32.0,"so2":12.0,"o3":29.0},"classification":{"level":"unhealthy_sensitive","label":"Kém"}}""")
-)
-
 @Composable
 fun AirQualityScreen(
     api: ApiClient,
@@ -287,8 +267,8 @@ fun AirQualityScreen(
                 summary = sum
                 stations = stList
             } catch (_: Exception) {
-                summary = defaultSummary()
-                stations = defaultStations()
+                summary = null
+                stations = emptyList()
             } finally {
                 loading = false
             }
@@ -316,7 +296,9 @@ fun AirQualityScreen(
     }
 
     val nearestStation = remember(stationsWithDistance) {
-        stationsWithDistance.firstOrNull()?.first
+        stationsWithDistance.firstOrNull { (station, _) ->
+            station.objOrNull("latest_reading") != null
+        }?.first
     }
 
     val heroStation = remember(selectedZone, nearestStation, stations) {
@@ -527,7 +509,7 @@ fun AirQualityScreen(
                     onSelectZone = { selectedZone = it }
                 )
 
-                heroStation?.let { st ->
+                heroStation?.takeIf { it.objOrNull("latest_reading") != null }?.let { st ->
                     HeroZoneAirCard(
                         station = st,
                         distanceKm = heroDistance,
@@ -639,10 +621,10 @@ private fun HeroZoneAirCard(
     val (cleanName, district) = extractCleanNameAndDistrict(station)
     val reading = station.objOrNull("latest_reading")
     val aqi = reading?.intOrNull("aqi") ?: 75
-    val pm25 = reading?.doubleOrNull("pm25") ?: 22.4
-    val pm10 = reading?.doubleOrNull("pm10") ?: 38.0
-    val temp = reading?.doubleOrNull("temperature") ?: 28.0
-    val humidity = reading?.doubleOrNull("humidity") ?: 68.0
+    val pm25 = reading?.doubleOrNull("pm25")
+    val pm10 = reading?.doubleOrNull("pm10")
+    val temp = reading?.doubleOrNull("temperature")
+    val humidity = reading?.doubleOrNull("humidity")
 
     val color = aqiColorForVal(aqi)
     val levelLabel = aqiLevelTitle(aqi)
@@ -747,7 +729,7 @@ private fun HeroZoneAirCard(
                             lineHeight = 46.sp
                         )
                         Text(
-                            text = "VN-AQI",
+                            text = "AQI (US EPA)",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
                             color = OpenCityColors.TextMuted,
@@ -859,25 +841,25 @@ private fun HeroZoneAirCard(
             ) {
                 MiniMetricCard(
                     icon = Icons.Default.Grain,
-                    iconTint = if (pm25 <= 25.0) OpenCityColors.BrandMintDark else OpenCityColors.BrandAmberDark,
+                    iconTint = if (pm25 != null && pm25 <= 50.0) OpenCityColors.BrandMintDark else OpenCityColors.BrandAmberDark,
                     label = "Bụi PM2.5",
-                    value = String.format(Locale.US, "%.1f", pm25),
-                    unit = "µg/m³",
+                    value = pm25?.let { String.format(Locale.US, "%.1f", it) } ?: "—",
+                    unit = "AQI",
                     modifier = Modifier.weight(1f)
                 )
                 MiniMetricCard(
                     icon = Icons.Default.Grain,
-                    iconTint = if (pm10 <= 50.0) OpenCityColors.BrandCyan else OpenCityColors.BrandAmberDark,
+                    iconTint = if (pm10 != null && pm10 <= 50.0) OpenCityColors.BrandCyan else OpenCityColors.BrandAmberDark,
                     label = "Bụi PM10",
-                    value = String.format(Locale.US, "%.1f", pm10),
-                    unit = "µg/m³",
+                    value = pm10?.let { String.format(Locale.US, "%.1f", it) } ?: "—",
+                    unit = "AQI",
                     modifier = Modifier.weight(1f)
                 )
                 MiniMetricCard(
                     icon = Icons.Default.Thermostat,
                     iconTint = Color(0xFFF97316),
                     label = "Nhiệt độ",
-                    value = "${temp.toInt()}",
+                    value = temp?.toInt()?.toString() ?: "—",
                     unit = "°C",
                     modifier = Modifier.weight(1f)
                 )
@@ -885,7 +867,7 @@ private fun HeroZoneAirCard(
                     icon = Icons.Default.WaterDrop,
                     iconTint = OpenCityColors.BrandAzure,
                     label = "Độ ẩm",
-                    value = "${humidity.toInt()}",
+                    value = humidity?.toInt()?.toString() ?: "—",
                     unit = "%",
                     modifier = Modifier.weight(1f)
                 )
@@ -1075,10 +1057,10 @@ private fun NearbyStationCard(
     val (cleanName, district) = extractCleanNameAndDistrict(station)
     val address = station.text("address")
     val reading = station.objOrNull("latest_reading")
-    val aqi = reading?.intOrNull("aqi") ?: 75
-    val pm25 = reading?.doubleOrNull("pm25") ?: 20.0
-    val color = aqiColorForVal(aqi)
-    val label = aqiLevelTitle(aqi)
+    val aqi = reading?.intOrNull("aqi")
+    val pm25 = reading?.doubleOrNull("pm25")
+    val color = aqi?.let(::aqiColorForVal) ?: Color(0xFF64748B)
+    val label = aqi?.let(::aqiLevelTitle) ?: "Chưa có AQI"
 
     Surface(
         color = OpenCityColors.CardBg,
@@ -1110,7 +1092,7 @@ private fun NearbyStationCard(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = "$aqi",
+                        text = aqi?.toString() ?: "—",
                         fontSize = 21.sp,
                         fontWeight = FontWeight.Black,
                         color = Color.White,
@@ -1196,7 +1178,7 @@ private fun NearbyStationCard(
                     )
 
                     Text(
-                        text = "PM2.5: ${String.format(Locale.US, "%.1f", pm25)} µg/m³",
+                        text = "AQI PM2.5: ${pm25?.let { String.format(Locale.US, "%.1f", it) } ?: "—"}",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium,
                         color = OpenCityColors.TextSecondary
@@ -1260,6 +1242,7 @@ private fun AirQualityMapView(
         MapLibre.getInstance(context)
         MapView(context).apply {
             onCreate(null)
+            val mapViewForCamera = this
             getMapAsync { map ->
                 map.setStyle(
                     Style.Builder().fromUri("https://tiles.openfreemap.org/styles/positron")
@@ -1308,7 +1291,7 @@ private fun AirQualityMapView(
                         val lat = st.doubleOrNull("latitude") ?: return@forEach
                         val lon = st.doubleOrNull("longitude") ?: return@forEach
                         val rd = st.objOrNull("latest_reading")
-                        val aqi = rd?.intOrNull("aqi") ?: 75
+                        val aqi = rd?.intOrNull("aqi")
                         val (cleanName, _) = extractCleanNameAndDistrict(st)
 
                         val markerBitmap = createAqiMarkerBitmap(context, aqi)
@@ -1318,9 +1301,23 @@ private fun AirQualityMapView(
                             MarkerOptions()
                                 .position(LatLng(lat, lon))
                                 .title(cleanName)
-                                .snippet("$aqi AQI")
+                                .snippet(aqi?.let { "$it AQI" } ?: "Chưa có AQI")
                                 .icon(icon)
                         )
+                    }
+
+                    if (stations.size >= 2) {
+                        val bounds = LatLngBounds.Builder()
+                        stations.forEach { st ->
+                            val lat = st.doubleOrNull("latitude")
+                            val lon = st.doubleOrNull("longitude")
+                            if (lat != null && lon != null) bounds.include(LatLng(lat, lon))
+                        }
+                        mapViewForCamera.post {
+                            runCatching {
+                                map.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds.build(), 100), 700)
+                            }
+                        }
                     }
 
                     map.setOnMarkerClickListener { marker ->
@@ -1374,7 +1371,6 @@ private fun AirQualityMapView(
         mapLibreMap?.getStyle { style ->
             updateZonesGeoJson(style)
         }
-        mapLibreMap?.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(userCoords.first, userCoords.second), 13.0))
     }
 
     DisposableEffect(lifecycleOwner, mapView) {
@@ -1471,10 +1467,9 @@ private fun AirQualityMapView(
             val (cleanName, district) = extractCleanNameAndDistrict(st)
             val address = st.text("address")
             val rd = st.objOrNull("latest_reading")
-            val aqi = rd?.intOrNull("aqi") ?: 75
-            val pm25 = rd?.doubleOrNull("pm25") ?: 20.0
-            val color = aqiColorForVal(aqi)
-            val label = aqiLevelTitle(aqi)
+            val aqi = rd?.intOrNull("aqi")
+            val color = aqi?.let(::aqiColorForVal) ?: Color(0xFF64748B)
+            val label = aqi?.let(::aqiLevelTitle) ?: "Chưa có AQI"
             val dist = calcDistanceKm(userCoords.first, userCoords.second, st.doubleOrNull("latitude") ?: 21.0, st.doubleOrNull("longitude") ?: 105.8)
 
             Surface(
@@ -1505,7 +1500,7 @@ private fun AirQualityMapView(
                             verticalArrangement = Arrangement.Center,
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Text("$aqi", fontSize = 18.sp, fontWeight = FontWeight.Black, color = Color.White)
+                            Text(aqi?.toString() ?: "—", fontSize = 18.sp, fontWeight = FontWeight.Black, color = Color.White)
                             Text(label, fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         }
                     }
@@ -1594,7 +1589,7 @@ private fun buildAqiZonesGeoJson(
         val lat = st.doubleOrNull("latitude") ?: return@forEach
         val lon = st.doubleOrNull("longitude") ?: return@forEach
         val rd = st.objOrNull("latest_reading")
-        val aqi = rd?.intOrNull("aqi") ?: 75
+        val aqi = rd?.intOrNull("aqi") ?: return@forEach
         val code = st.text("code")
         val isSelected = selectedCode == code
         val color = aqiColorHex(aqi)
@@ -1696,7 +1691,7 @@ private fun createUserLocationMarkerBitmap(context: Context): Bitmap {
     return bitmap
 }
 
-private fun createAqiMarkerBitmap(context: Context, aqi: Int): Bitmap {
+private fun createAqiMarkerBitmap(context: Context, aqi: Int?): Bitmap {
     val density = context.resources.displayMetrics.density
     val size = (38 * density).toInt()
     val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
@@ -1704,7 +1699,7 @@ private fun createAqiMarkerBitmap(context: Context, aqi: Int): Bitmap {
 
     val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.FILL
-        color = aqiColorForVal(aqi).toArgb()
+        color = (aqi?.let(::aqiColorForVal) ?: Color(0xFF64748B)).toArgb()
     }
 
     val shadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -1731,7 +1726,7 @@ private fun createAqiMarkerBitmap(context: Context, aqi: Int): Bitmap {
     }
 
     val yPos = radius - (textPaint.descent() + textPaint.ascent()) / 2
-    canvas.drawText(aqi.toString(), radius, yPos, textPaint)
+    canvas.drawText(aqi?.toString() ?: "—", radius, yPos, textPaint)
 
     return bitmap
 }
@@ -1744,19 +1739,22 @@ private fun StationDetailDialog(
     val (cleanName, district) = extractCleanNameAndDistrict(station)
     val address = station.text("address")
     val reading = station.objOrNull("latest_reading")
-    val aqi = reading?.intOrNull("aqi") ?: 75
-    val pm25 = reading?.doubleOrNull("pm25") ?: 0.0
-    val pm10 = reading?.doubleOrNull("pm10") ?: 0.0
-    val temp = reading?.doubleOrNull("temperature") ?: 0.0
-    val humidity = reading?.doubleOrNull("humidity") ?: 0.0
-    val co = reading?.doubleOrNull("co") ?: 0.3
-    val no2 = reading?.doubleOrNull("no2") ?: 18.0
-    val so2 = reading?.doubleOrNull("so2") ?: 6.5
-    val o3 = reading?.doubleOrNull("o3") ?: 22.0
+    val aqi = reading?.intOrNull("aqi")
+    val pm25 = reading?.doubleOrNull("pm25")
+    val pm10 = reading?.doubleOrNull("pm10")
+    val temp = reading?.doubleOrNull("temperature")
+    val humidity = reading?.doubleOrNull("humidity")
+    val co = reading?.doubleOrNull("co")
+    val no2 = reading?.doubleOrNull("no2")
+    val so2 = reading?.doubleOrNull("so2")
+    val o3 = reading?.doubleOrNull("o3")
 
-    val color = aqiColorForVal(aqi)
-    val levelLabel = aqiLevelTitle(aqi)
-    val (adviceHeadline, tips) = aqiQuickAdvice(aqi)
+    val color = aqi?.let(::aqiColorForVal) ?: Color(0xFF64748B)
+    val levelLabel = aqi?.let(::aqiLevelTitle) ?: "Chưa có AQI"
+    val (adviceHeadline, tips) = aqi?.let(::aqiQuickAdvice)
+        ?: ("Trạm chưa công bố AQI hiện tại." to emptyList())
+    fun measured(value: Double?, digits: Int = 1): String =
+        value?.let { String.format(Locale.US, "%.${digits}f", it) } ?: "—"
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -1801,7 +1799,7 @@ private fun StationDetailDialog(
                     ) {
                         Column {
                             Text("CHỈ SỐ KHÔNG KHÍ", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = color)
-                            Text("$aqi AQI", fontSize = 32.sp, fontWeight = FontWeight.Black, color = color)
+                            Text(aqi?.let { "$it AQI" } ?: "Chưa có AQI", fontSize = 32.sp, fontWeight = FontWeight.Black, color = color)
                         }
 
                         Surface(color = color, shape = RoundedCornerShape(10.dp)) {
@@ -1818,22 +1816,26 @@ private fun StationDetailDialog(
 
                 Text(adviceHeadline, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = OpenCityColors.TextMain)
 
+                reading?.optString("note")?.takeIf { it.isNotBlank() }?.let { source ->
+                    Text(source, fontSize = 11.sp, color = OpenCityColors.TextMuted)
+                }
+
                 HorizontalDivider(color = OpenCityColors.BorderColor)
 
-                Text("Nồng độ các thông số quan trắc", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = OpenCityColors.TextMain)
+                Text("Chỉ số AQI thành phần và thời tiết", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = OpenCityColors.TextMain)
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    DetailParamBox(Modifier.weight(1f), "PM2.5", String.format(Locale.US, "%.1f", pm25), "µg/m³", color)
-                    DetailParamBox(Modifier.weight(1f), "PM10", String.format(Locale.US, "%.1f", pm10), "µg/m³", OpenCityColors.BrandCyan)
-                    DetailParamBox(Modifier.weight(1f), "Nhiệt độ", "${temp.toInt()}", "°C", Color(0xFFF97316))
-                    DetailParamBox(Modifier.weight(1f), "Độ ẩm", "${humidity.toInt()}", "%", OpenCityColors.BrandAzure)
+                    DetailParamBox(Modifier.weight(1f), "PM2.5", measured(pm25), "AQI", color)
+                    DetailParamBox(Modifier.weight(1f), "PM10", measured(pm10), "AQI", OpenCityColors.BrandCyan)
+                    DetailParamBox(Modifier.weight(1f), "Nhiệt độ", temp?.toInt()?.toString() ?: "—", "°C", Color(0xFFF97316))
+                    DetailParamBox(Modifier.weight(1f), "Độ ẩm", humidity?.toInt()?.toString() ?: "—", "%", OpenCityColors.BrandAzure)
                 }
 
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    DetailParamBox(Modifier.weight(1f), "CO", String.format(Locale.US, "%.2f", co), "mg/m³", OpenCityColors.TextSecondary)
-                    DetailParamBox(Modifier.weight(1f), "NO₂", String.format(Locale.US, "%.1f", no2), "µg/m³", OpenCityColors.TextSecondary)
-                    DetailParamBox(Modifier.weight(1f), "SO₂", String.format(Locale.US, "%.1f", so2), "µg/m³", OpenCityColors.TextSecondary)
-                    DetailParamBox(Modifier.weight(1f), "O₃", String.format(Locale.US, "%.1f", o3), "µg/m³", OpenCityColors.TextSecondary)
+                    DetailParamBox(Modifier.weight(1f), "CO", measured(co, 2), "AQI", OpenCityColors.TextSecondary)
+                    DetailParamBox(Modifier.weight(1f), "NO₂", measured(no2), "AQI", OpenCityColors.TextSecondary)
+                    DetailParamBox(Modifier.weight(1f), "SO₂", measured(so2), "AQI", OpenCityColors.TextSecondary)
+                    DetailParamBox(Modifier.weight(1f), "O₃", measured(o3), "AQI", OpenCityColors.TextSecondary)
                 }
 
                 // Khuyến nghị y tế
