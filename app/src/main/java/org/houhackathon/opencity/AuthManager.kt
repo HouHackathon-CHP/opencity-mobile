@@ -72,20 +72,103 @@ class AuthManager(context: Context) {
     private val store = SessionStore(context.applicationContext)
     private val background = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val http = OkHttpClient.Builder().callTimeout(5, TimeUnit.SECONDS).build()
-    private val configuration = AuthorizationServiceConfiguration(
-        Uri.parse("${BuildConfig.IDENTITY_URL}/realms/dxos/protocol/openid-connect/auth"),
-        Uri.parse("${BuildConfig.IDENTITY_URL}/realms/dxos/protocol/openid-connect/token")
-    )
+    private val identityBaseUrl: String by lazy {
+        BuildConfig.IDENTITY_URL.trimEnd('/')
+    }
+
+    private val configuration by lazy {
+        AuthorizationServiceConfiguration(
+            Uri.parse("${identityBaseUrl}/realms/dxos/protocol/openid-connect/auth"),
+            Uri.parse("${identityBaseUrl}/realms/dxos/protocol/openid-connect/token")
+        )
+    }
+
+    private val isEmulator: Boolean by lazy {
+        android.os.Build.FINGERPRINT.startsWith("generic") ||
+                android.os.Build.FINGERPRINT.startsWith("unknown") ||
+                android.os.Build.MODEL.contains("google_sdk") ||
+                android.os.Build.MODEL.contains("Emulator") ||
+                android.os.Build.MODEL.contains("Android SDK") ||
+                android.os.Build.HARDWARE.contains("goldfish") ||
+                android.os.Build.HARDWARE.contains("ranchu")
+    }
+
     // HTTP is accepted only for the local emulator demo. Production URLs must use HTTPS.
     private val service = AuthorizationService(context, AppAuthConfiguration.Builder()
         .setConnectionBuilder(ConnectionBuilder { uri ->
-            require(uri.scheme == "https" || (BuildConfig.DEBUG && uri.host in listOf("127.0.0.1", "localhost")))
-            URL(uri.toString()).openConnection() as HttpURLConnection
+            require(uri.scheme == "https" || (BuildConfig.DEBUG && uri.host in listOf("127.0.0.1", "localhost", "10.0.2.2")))
+            val targetUri = if (isEmulator && (uri.host == "localhost" || uri.host == "127.0.0.1")) {
+                val port = if (uri.port != -1) ":${uri.port}" else ""
+                Uri.parse(uri.toString().replace("://localhost$port", "://10.0.2.2$port").replace("://127.0.0.1$port", "://10.0.2.2$port"))
+            } else uri
+            val conn = URL(targetUri.toString()).openConnection() as HttpURLConnection
+            if (isEmulator && (uri.host == "localhost" || uri.host == "127.0.0.1")) {
+                val hostHeader = if (uri.port != -1) "${uri.host}:${uri.port}" else uri.host
+                conn.setRequestProperty("Host", hostHeader)
+            }
+            conn
         }).build())
     private var state = try { store.read()?.let { AuthState.jsonDeserialize(it) } ?: AuthState() }
         catch (_: Exception) { AuthState() }
     var signedIn by mutableStateOf(state.isAuthorized)
         private set
+
+    val roles: Set<String>
+        get() {
+            val token = state.accessToken ?: return emptySet()
+            return try {
+                val parts = token.split(".")
+                if (parts.size >= 2) {
+                    val raw = Base64.decode(parts[1], Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
+                    val json = org.json.JSONObject(String(raw, Charsets.UTF_8))
+                    val realmAccess = json.optJSONObject("realm_access")
+                    val rolesArr = realmAccess?.optJSONArray("roles")
+                    val set = mutableSetOf<String>()
+                    if (rolesArr != null) {
+                        for (i in 0 until rolesArr.length()) {
+                            set.add(rolesArr.getString(i))
+                        }
+                    }
+                    set
+                } else emptySet()
+            } catch (_: Exception) { emptySet() }
+        }
+
+    val isDispatcher: Boolean
+        get() = "reports_dispatcher" in roles || "operator" in roles || "admin" in roles
+
+    val roleBadge: String
+        get() = when {
+            "reports_dispatcher" in roles -> "dispatcher"
+            "operator" in roles -> "operator"
+            "admin" in roles -> "admin"
+            signedIn -> "citizen"
+            else -> "guest"
+        }
+
+    val roleTitle: String
+        get() = when {
+            "reports_dispatcher" in roles -> "Cán bộ Điều phối"
+            "operator" in roles -> "Cán bộ Xử lý"
+            "admin" in roles -> "Quản trị hệ thống"
+            signedIn -> "Công dân số"
+            else -> "Khách vãng lai"
+        }
+
+    val userName: String?
+        get() {
+            val idToken = state.idToken ?: return null
+            return try {
+                val parts = idToken.split(".")
+                if (parts.size >= 2) {
+                    val raw = Base64.decode(parts[1], Base64.URL_SAFE or Base64.NO_PADDING or Base64.NO_WRAP)
+                    val json = org.json.JSONObject(String(raw, Charsets.UTF_8))
+                    json.optString("name").takeIf { it.isNotBlank() }
+                        ?: json.optString("preferred_username").takeIf { it.isNotBlank() }
+                        ?: json.optString("email").takeIf { it.isNotBlank() }
+                } else null
+            } catch (_: Exception) { null }
+        }
 
     fun signInIntent(): Intent {
         val request = AuthorizationRequest.Builder(configuration, "dxos-mobile", ResponseTypeValues.CODE,
@@ -94,8 +177,12 @@ class AuthManager(context: Context) {
     }
 
     fun registerIntent(): Intent {
-        val request = AuthorizationRequest.Builder(configuration, "dxos-mobile", ResponseTypeValues.CODE,
-            Uri.parse("opencity://auth"))
+        val request = AuthorizationRequest.Builder(
+            configuration,
+            "dxos-mobile",
+            ResponseTypeValues.CODE,
+            Uri.parse("opencity://auth")
+        )
             .setScope("openid profile email")
             .setPrompt("create")
             .build()
@@ -128,15 +215,28 @@ class AuthManager(context: Context) {
     }
 
     suspend fun accessToken(): String = suspendCancellableCoroutine { continuation ->
-        if (!state.isAuthorized) { continuation.resumeWith(Result.failure(IllegalStateException("Vui lòng đăng nhập."))); return@suspendCancellableCoroutine }
+        if (!state.isAuthorized) {
+            signedIn = false
+            continuation.resumeWith(Result.failure(IllegalStateException("Vui lòng đăng nhập.")))
+            return@suspendCancellableCoroutine
+        }
         val requestedState = state
         requestedState.performActionWithFreshTokens(service) { token, _, error ->
             if (state !== requestedState) {
                 continuation.resumeWith(Result.failure(IllegalStateException("Đã đăng xuất.")))
                 return@performActionWithFreshTokens
             }
-            if (token == null) continuation.resumeWith(Result.failure(IllegalStateException(error?.errorDescription ?: "Phiên đăng nhập đã hết hạn.")))
-            else { store.write(state.jsonSerializeString()); continuation.resume(token) }
+            if (token == null) {
+                if (error != null) {
+                    signedIn = false
+                    store.clear()
+                    state = AuthState()
+                }
+                continuation.resumeWith(Result.failure(IllegalStateException(error?.errorDescription ?: "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.")))
+            } else {
+                store.write(state.jsonSerializeString())
+                continuation.resume(token)
+            }
         }
     }
 
@@ -149,7 +249,7 @@ class AuthManager(context: Context) {
             runCatching {
                 val body = FormBody.Builder().add("client_id", "dxos-mobile")
                     .add("token", refreshToken).add("token_type_hint", "refresh_token").build()
-                val req = Request.Builder().url("${BuildConfig.IDENTITY_URL}/realms/dxos/protocol/openid-connect/revoke")
+                val req = Request.Builder().url("${identityBaseUrl}/realms/dxos/protocol/openid-connect/revoke")
                     .post(body).build()
                 http.newCall(req).execute().close()
             }

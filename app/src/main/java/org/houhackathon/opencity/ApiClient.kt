@@ -14,8 +14,22 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
-class ApiClient(private val context: Context, private val auth: AuthManager) {
+class ApiClient(private val context: Context, val auth: AuthManager) {
     private val http = OkHttpClient.Builder().callTimeout(25, TimeUnit.SECONDS).build()
+    private val publicCollections = setOf(
+        "/bulletins", "/hotlines", "/air-quality/summary", "/air-quality/stations",
+        "/bus/routes", "/bus/stops", "/bus/find", "/bus/audit"
+    )
+    private val publicDetails = listOf(
+        Regex("^/bulletins/[A-Za-z0-9_.:-]{1,128}$"),
+        Regex("^/air-quality/stations/[A-Za-z0-9_.:-]{1,128}$"),
+        Regex("^/bus/(routes|stops)/[A-Za-z0-9_.:-]{1,128}$")
+    )
+
+    fun isPublicRead(path: String): Boolean {
+        val route = path.substringBefore('?')
+        return route in publicCollections || publicDetails.any { it.matches(route) }
+    }
 
     private fun resolveBaseUrl(): String {
         val base = BuildConfig.GATEWAY_URL
@@ -35,7 +49,18 @@ class ApiClient(private val context: Context, private val auth: AuthManager) {
 
     private suspend fun request(path: String, method: String = "GET", body: okhttp3.RequestBody? = null): String =
         withContext(Dispatchers.IO) {
-            val token = runCatching { auth.accessToken() }.getOrNull()
+            val token = when {
+                auth.signedIn -> {
+                    try {
+                        auth.accessToken()
+                    } catch (e: Exception) {
+                        if (method == "GET" && isPublicRead(path)) null
+                        else throw IllegalStateException("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.")
+                    }
+                }
+                method == "GET" && isPublicRead(path) -> null
+                else -> throw IllegalStateException("Yêu cầu đăng nhập tài khoản công dân DX-OS để sử dụng tính năng này.")
+            }
             val base = resolveBaseUrl()
             val gatewayUrl = "$base/api/opencity$path"
             val directUrl = "$base$path"
@@ -46,7 +71,7 @@ class ApiClient(private val context: Context, private val auth: AuthManager) {
                     reqBuilder.header("Authorization", "Bearer $token")
                 }
                 reqBuilder.header("X-Internal-Secret", "dxos_internal_gateway_secret_2026")
-                reqBuilder.header("X-DXOS-User", "public-citizen")
+                reqBuilder.header("X-DXOS-User", auth.userName?.takeIf { it.isNotBlank() } ?: "public-citizen")
                 reqBuilder.header("X-DXOS-Tenant", "demo")
                 reqBuilder.header("X-DXOS-Roles", "citizen")
                 return http.newCall(reqBuilder.build()).execute()
@@ -61,7 +86,13 @@ class ApiClient(private val context: Context, private val auth: AuthManager) {
             resp.use { response ->
                 val value = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
+                    if (response.code == 401) {
+                        throw IllegalStateException("Yêu cầu đăng nhập tài khoản công dân DX-OS để sử dụng tính năng này.")
+                    }
                     val detail = runCatching { JSONObject(value).optString("detail") }.getOrNull()
+                    if (detail != null && (detail.contains("token", ignoreCase = true) || detail.contains("unauthorized", ignoreCase = true))) {
+                        throw IllegalStateException("Yêu cầu đăng nhập tài khoản công dân DX-OS để sử dụng tính năng này.")
+                    }
                     throw IllegalStateException(detail?.takeIf { it.isNotBlank() } ?: "HTTP ${response.code}")
                 }
                 value
@@ -98,6 +129,30 @@ class ApiClient(private val context: Context, private val auth: AuthManager) {
     suspend fun saveConsultationOpinion(id: String, body: String): JSONObject = JSONObject(
         request("/social-feedback/topics/$id/opinion", "PUT",
             JSONObject().put("body", body.trim()).toString().toRequestBody("application/json".toMediaType())))
+    suspend fun createBusinessPetition(
+        companyName: String,
+        taxCode: String,
+        representative: String,
+        sector: String,
+        title: String,
+        description: String,
+        requestedResolution: String
+    ): JSONObject = itemPost("/business-feedback", JSONObject().apply {
+        put("company_name", companyName.trim())
+        put("tax_code", taxCode.trim())
+        put("representative", representative.trim())
+        put("sector", sector.trim())
+        put("title", title.trim())
+        put("description", description.trim())
+        put("requested_resolution", requestedResolution.trim())
+    })
+
+    suspend fun provideBusinessPetitionInfo(id: String, note: String): JSONObject =
+        itemPost("/business-feedback/$id/provide-info", JSONObject().put("note", note.trim()))
+
+    suspend fun reopenBusinessPetition(id: String, note: String): JSONObject =
+        itemPost("/business-feedback/$id/reopen", JSONObject().put("note", note.trim()))
+
     private suspend fun itemPost(path: String, value: JSONObject): JSONObject = JSONObject(request(path, "POST",
         value.toString().toRequestBody("application/json".toMediaType())))
 
@@ -122,4 +177,7 @@ class ApiClient(private val context: Context, private val auth: AuthManager) {
         }
         return JSONObject(request("/reports", "POST", body.build()))
     }
+
+    suspend fun post(path: String, value: JSONObject = JSONObject()): JSONObject = itemPost(path, value)
+    suspend fun get(path: String): JSONObject = item(path)
 }
