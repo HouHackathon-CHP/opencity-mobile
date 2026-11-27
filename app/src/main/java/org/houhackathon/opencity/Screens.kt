@@ -43,7 +43,7 @@ internal fun JSONObject.number(key: String): Double? = if (isNull(key)) null els
 // 1. WELCOME SCREEN (When citizen is not logged in)
 // ==========================================
 @Composable
-fun WelcomeScreen(login: () -> Unit, onExplore: () -> Unit = {}, modifier: Modifier = Modifier) {
+fun WelcomeScreen(login: () -> Unit, register: () -> Unit, onExplore: () -> Unit = {}, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -173,6 +173,19 @@ fun WelcomeScreen(login: () -> Unit, onExplore: () -> Unit = {}, modifier: Modif
                     fontWeight = FontWeight.Bold
                 )
             }
+        }
+
+        Spacer(Modifier.height(10.dp))
+
+        OutlinedButton(
+            onClick = register,
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.5.dp, OpenCityColors.BrandAzure)
+        ) {
+            Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Đăng ký tài khoản công dân", fontWeight = FontWeight.Bold)
         }
 
         Spacer(Modifier.height(10.dp))
@@ -1563,6 +1576,7 @@ private fun TimelineNode(action: String, timestamp: String, note: String?, isLas
 fun AccountScreen(
     signedIn: Boolean,
     login: () -> Unit,
+    register: () -> Unit,
     onLogout: () -> Unit,
     onSurveys: () -> Unit,
     onCatalog: () -> Unit
@@ -1731,6 +1745,17 @@ fun AccountScreen(
                     Icon(imageVector = Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
                     Text(text = "Đăng nhập với DX-OS Citizen", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 }
+            }
+            Spacer(Modifier.height(10.dp))
+            OutlinedButton(
+                onClick = register,
+                modifier = Modifier.fillMaxWidth().height(50.dp),
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.5.dp, OpenCityColors.BrandAzure)
+            ) {
+                Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Đăng ký tài khoản công dân mới", fontWeight = FontWeight.Bold, fontSize = 14.sp)
             }
         }
 

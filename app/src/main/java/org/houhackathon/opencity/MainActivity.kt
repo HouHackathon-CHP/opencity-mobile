@@ -49,6 +49,10 @@ class MainActivity : ComponentActivity() {
                     authMessage = null
                     signIn.launch(auth.signInIntent())
                 },
+                register = {
+                    authMessage = null
+                    signIn.launch(auth.registerIntent())
+                },
                 authMessage = authMessage,
                 clearAuthMessage = { authMessage = null }
             )
@@ -67,6 +71,7 @@ private fun OpenCityApp(
     auth: AuthManager,
     api: ApiClient,
     login: () -> Unit,
+    register: () -> Unit,
     authMessage: String?,
     clearAuthMessage: () -> Unit
 ) {
@@ -274,6 +279,7 @@ private fun OpenCityApp(
                 if (!signedIn && !guestMode && page != "account") {
                     WelcomeScreen(
                         login = login,
+                        register = register,
                         onExplore = { guestMode = true },
                         modifier = Modifier.fillMaxSize()
                     )
@@ -353,6 +359,7 @@ private fun OpenCityApp(
                         "account" -> AccountScreen(
                             signedIn = signedIn,
                             login = login,
+                            register = register,
                             onLogout = {
                                 auth.signOut()
                                 page = "home"

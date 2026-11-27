@@ -93,6 +93,15 @@ class AuthManager(context: Context) {
         return service.getAuthorizationRequestIntent(request)
     }
 
+    fun registerIntent(): Intent {
+        val request = AuthorizationRequest.Builder(configuration, "dxos-mobile", ResponseTypeValues.CODE,
+            Uri.parse("opencity://auth"))
+            .setScope("openid profile email")
+            .setPrompt("create")
+            .build()
+        return service.getAuthorizationRequestIntent(request)
+    }
+
     fun completeSignIn(intent: Intent?, done: (String?) -> Unit) {
         if (intent == null) { done(null); return }
         val response = AuthorizationResponse.fromIntent(intent)
